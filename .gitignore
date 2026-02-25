@@ -1,0 +1,14 @@
+# Secrets
+.env
+secrets/
+*.secret
+
+# Claude Code
+.claude/settings.local.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node (if needed for tools)
+node_modules/

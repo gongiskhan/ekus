@@ -1,0 +1,14 @@
+{
+  "boards": {
+    "geral": {
+      "id": "BOARD_ID_HERE",
+      "lists": {
+        "a_fazer": "LIST_ID_HERE",
+        "brevemente": "LIST_ID_HERE",
+        "eventualmente": "LIST_ID_HERE",
+        "projetos": "LIST_ID_HERE"
+      }
+    }
+  },
+  "notes": "Replace IDs with your actual Trello board/list IDs. Find them via: curl 'https://api.trello.com/1/members/me/boards?key=KEY&token=TOKEN&fields=name,id'"
+}
