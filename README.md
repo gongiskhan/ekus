@@ -46,7 +46,8 @@ That's it. Claude reads `CLAUDE.md` automatically and knows how to use all the s
 | 🔍 Search | Brave API / Browser | `.claude/skills/search/` |
 | 🎙️ Voice | ElevenLabs API | `.claude/skills/voice/` |
 | ⏰ Reminders | Calendar + Trello + local | `.claude/skills/reminders/` |
-| 🧠 Memory | Claude Code `/memory` | Built-in |
+| ⏱️ Scheduler | launchd + crontab | `.claude/skills/scheduler/` |
+| 🧠 Memory | Claude Code `/memory` + files | Built-in + `memory/` |
 
 ## Architecture
 
@@ -65,8 +66,17 @@ ekus/
 │       └── reminders/
 ├── config/
 │   └── trello.json        # Trello board/list IDs
+├── scripts/
+│   ├── run-job.sh         # Run a scheduled job
+│   ├── add-job.sh         # Add a new job
+│   ├── list-jobs.sh       # List all jobs
+│   ├── scheduler-tick.sh  # Scheduler daemon (called by launchd)
+│   └── install-scheduler.sh # Install launchd agent
 ├── memory/
-│   └── reminders.md       # Local reminder backup
+│   ├── reminders.md       # Local reminder backup
+│   ├── lessons-learned.md # Hard-won knowledge
+│   └── workflows.md       # Step-by-step processes
+├── logs/                  # Job execution logs
 ├── .env.example           # Template for secrets
 ├── .env                   # Your secrets (gitignored)
 └── .gitignore

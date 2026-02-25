@@ -1,0 +1,18 @@
+{
+  "jobs": [
+    {
+      "id": "task-list",
+      "description": "Compile and display task list from Trello + Calendar",
+      "schedule": "0 6-21 * * 1-5",
+      "prompt": "Source .env. Fetch all cards from Trello 'A Fazer' list (use TRELLO_KEY and TRELLO_TOKEN from env, list ID from config/trello.json). Check today's calendar events. Compile a clean task list with: 1) Today's agenda (with times), 2) Dev tasks (prioritized), 3) Other tasks, 4) Brevemente items. Save to memory/today-tasks.md. Print the summary.",
+      "enabled": true
+    },
+    {
+      "id": "morning-briefing",
+      "description": "Daily morning briefing at 8am",
+      "schedule": "0 8 * * 1-5",
+      "prompt": "Good morning briefing: 1) Check today's calendar events, 2) List Trello 'A Fazer' cards, 3) Check for any pending reminders in memory/reminders.md, 4) Summarize what's on for today. Be concise.",
+      "enabled": false
+    }
+  ]
+}

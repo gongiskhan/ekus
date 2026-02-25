@@ -36,6 +36,28 @@ Example: "Find dentist invoices in email and upload to insurance portal"
 3. **MCP tools** — for email, calendar, and other integrations
 4. **Shell commands** — for file operations, API calls, etc.
 
+## Scheduling
+
+You have a cron-based scheduler for recurring tasks. See `.claude/skills/scheduler/SKILL.md`.
+
+**Quick commands:**
+```bash
+./scripts/list-jobs.sh              # See all jobs
+./scripts/run-job.sh <id>           # Run a job now
+./scripts/add-job.sh <id> <cron> <prompt> [--crontab]  # Add a job
+./scripts/install-scheduler.sh      # Install launchd daemon
+```
+
+For one-shot reminders, prefer adding a crontab entry that self-removes after firing.
+For recurring tasks, add to `config/jobs.json` and install the scheduler.
+
+## Knowledge Base
+
+Before tackling tasks, check these files:
+- `memory/lessons-learned.md` — Hard-won knowledge, mistakes to avoid
+- `memory/workflows.md` — Step-by-step processes for common tasks
+- `memory/reminders.md` — Pending reminders
+
 ## Memory
 
 Use Claude Code's built-in memory (`/memory`) to learn:
@@ -92,6 +114,7 @@ Available skills:
 - **search** — Web search for research
 - **voice** — Text-to-speech via ElevenLabs
 - **reminders** — Schedule reminders and follow-ups
+- **scheduler** — Cron-based task scheduling (launchd + crontab)
 
 ## Formatting
 
