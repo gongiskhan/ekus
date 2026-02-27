@@ -235,6 +235,7 @@ Available skills:
 - **voice** — Text-to-speech via ElevenLabs
 - **reminders** — Schedule reminders and follow-ups
 - **scheduler** — Cron-based task scheduling (launchd + crontab)
+- **faturas** — Monthly invoice collection for Modern Marathon LDA + upload to Octa Manager
 
 ## Formatting
 
