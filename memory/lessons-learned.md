@@ -64,11 +64,32 @@ himalaya message read <ID>
 ## Invoice Collection (Faturas)
 
 Recurring monthly task. Sources:
-- **Gmail**: Vodafone, Credibom, Via Verde, Prio, BCP
+- **Gmail**: Vodafone, Credibom, Via Verde, Prio, BCP, Ageas, Nexperience/Vendus
 - **WhatsApp**: Uber Eats receipts
 - **Portals**: InvoiceXpress, Atlantic Summit (need browser automation)
+- **Not in email**: ESLI (parking), Placegar (parking) — need portal or paper
 - **Download strategy**: Search email → download attachments → organize by month
 - **Upload to accountant portal** (Octa Manager): Use direct API, not browser upload
+
+### Octa Token Retrieval
+To get the Octa JWT token without himalaya:
+1. Open https://manager.octacode.pt in Chrome (must be logged in)
+2. Use JavaScript tool: create blob with `localStorage.getItem('authToken')`, trigger download
+3. Read file from ~/Downloads, append to .env as `OCTA_TOKEN=...`
+4. Token lasts ~1 year
+
+### Gmail Attachment Download (without himalaya)
+himalaya requires complex OAuth2 setup. Workaround:
+1. Navigate to each email in Chrome via `mail.google.com/mail/u/0/#all/{messageId}`
+2. Scroll to attachments, hover to reveal download button, click download icon
+3. For multiple attachments, click the "Download all" icon (downloads as zip)
+4. Files land in ~/Downloads — move to faturas folder
+
+### BCP Enterprise Emails
+- From `alertas.empresas@millenniumbcp.pt` to goncalo.p.gomes@gmail.com (company account)
+- Separate from personal `banco@millenniumbcp.pt` to googlemail.com
+- January docs arrive in early February — search Feb 1-10 for January invoices
+- Attachments named "NL {timestamp}.pdf" contain bank fee invoices
 
 ## Browser Automation
 
@@ -137,6 +158,9 @@ This ensures nothing gets missed even if one system is ignored.
 ### Gmail category:primary Doesn't Filter Reliably
 Searching `is:inbox category:primary newer_than:1h` via MCP still returns CATEGORY_UPDATES emails.
 To properly filter, check `labelIds` in results — only include messages with `CATEGORY_PERSONAL` or `IMPORTANT` labels, and exclude `CATEGORY_UPDATES`, `CATEGORY_PROMOTIONS`, `CATEGORY_SOCIAL`, `CATEGORY_FORUMS`.
+
+### Claude Code Stop Hook: "approve" not "allow"
+The Stop hook schema uses `"decision": "approve"` or `"decision": "block"`. Using `"allow"` causes a JSON validation error.
 
 ### Scheduler Prompts Must Be Self-Contained
 When writing prompts for `config/jobs.json`, remember:
