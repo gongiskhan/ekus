@@ -6,5 +6,29 @@
       "Write(*)",
       "Edit(*)"
     ]
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/ggomes/ekus/.claude/hooks/auto-learn-prompt.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/ggomes/ekus/.claude/hooks/auto-learn-stop.sh"
+          }
+        ]
+      }
+    ]
   }
 }
