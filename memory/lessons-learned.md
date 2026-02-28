@@ -217,6 +217,49 @@ The task list is stored in Cloudflare KV and served via the dashboard Worker.
 ### Never Re-Add Intentionally Removed Tasks
 When syncing tasks with Trello (or any external source), a task present in Trello but absent from the task list does NOT necessarily mean it's missing — it may have been intentionally removed by the user. Only flag genuinely NEW cards (created after the last sync). If a task was previously in the list and is now gone, assume the user removed it on purpose.
 
+## Portal das Finanças (e-fatura)
+
+### Session Switching Between Personal and Company NIF
+The e-fatura portal maintains separate sessions for personal and company NIFs. During a browser session, navigating directly to invoice detail URLs (e.g., `detalheDocumentoAdquirente.action?idDocumento=...`) can cause the session to switch to a different NIF (e.g., from personal "Gonçalo Paraizo Gomes" to company "Modern Marathon Lda"). Always check the welcome message ("Bem-vindo(a) [name]") after navigating. If it switches, the user must log out ("Fechar Sessão") and re-login with the correct NIF.
+
+### "Outros" = Despesas Gerais Familiares
+In the detail page dropdown ("Atividade de Realização da Aquisição"), "Outros" (C99) is the equivalent of "Despesas Gerais Familiares" (DGF). The listing page shows "DGF" as a search filter, but the edit form uses "Outros".
+
+### Invoice Category Codes
+- C01: Veículos automóveis (repair)
+- C02: Motociclos (repair)
+- C03: Alojamento/restauração
+- C04: Cabeleireiro/beleza
+- C05: Saúde
+- C06: Educação
+- C07: Imóveis
+- C08: Lares
+- C09: Veterinário
+- C10: Transportes públicos
+- C11: Ginásios
+- C12: Jornais/Revistas
+- C99: Outros (= Despesas Gerais Familiares)
+
+### Deadline for Validating Invoices
+2025 expenses must be validated on e-fatura by **March 2, 2026** (normally end of Feb, but extended because it falls on a weekend).
+
+### CAE Mismatch — Cannot Override Emitter's Sector
+When categorizing an invoice into a sector that doesn't match the emitter's registered CAE/CIRS codes, the portal redirects to `resolverPendenciaAdquirente.action` with a warning: "O emitente não tem atividade registada (CAE/CIRS) pertencente ao setor indicado." This is a **server-side validation** that cannot be bypassed. Examples:
+- **MetLife** (NIF 980479436, insurance company) → cannot be set to Saúde (C05) despite health insurance being IRS-deductible as health
+- **BCP / Santander** (banks) → cannot be set to Imóveis (C07) despite mortgage payments being housing deductions
+- **Solution**: Leave these as Outros (C99) on e-fatura. Declare them manually on **IRS Modelo 3 Anexo H** (Benefícios Fiscais e Deduções) to claim the correct deduction.
+
+### Listing Page "Setor" Column Shows Emitter's Sector, Not Acquirer's Classification
+The "Setor" column on the listing page (`consultarDocumentosAdquirente.action`) shows the emitter's registered business sector, NOT the classification chosen by the acquirer. Healthcare providers (pharmacies, clinics) often show blank because they haven't declared a sector with AT. The acquirer's chosen classification is only visible on the detail page (`detalheDocumentoAdquirente.action`) in the `ambitoAquisicao` select/input.
+
+### Automated Invoice Categorization Flow (JavaScript)
+The working pattern for automating invoice categorization:
+1. On listing page: click "Pesquisar", set page size to 50, click invoice link
+2. On detail page: click "Alterar" (`#alterarDocumentoBtn`), set `#ambitoAquisicao` to category code, set `#ambitoActividadeProf` to "1" (Não), click "Guardar" link
+3. Verify: check for "guardada com sucesso" in page text
+4. Navigate back to `consultarDocumentosAdquirente.action` (don't use history.back())
+Important: The Guardar button handler uses jQuery `.one()` — fires only once per page load.
+
 ## People
 
 ### Wilson Bicalho

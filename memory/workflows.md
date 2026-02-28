@@ -42,12 +42,27 @@
 2. **WhatsApp** — check for receipt images from Uber Eats, etc.
 3. **Portals** — InvoiceXpress, banking portals (need browser)
 
-### Process
-1. Search all sources for the target month
-2. Download PDFs/images
-3. Organize in folder: `faturas/YYYY-QN/` (e.g., `faturas/2026-Q1/`)
-4. Upload to accountant portal
-5. Track what's found vs missing in a checklist
+### Full Workflow (proven 2026-02-27)
+1. Search Gmail for Accoprime email: `from:accoprime subject:"documentos em falta"`
+2. Open email in Chrome, click PDF attachment to preview the missing docs list
+3. Read the list — note NIF, company name, doc number, date, amount for each
+4. Search Gmail per company (use `from:` and `after:/before:` date filters):
+   - BCP: `from:millenniumbcp "documentos em formato digital"` (enterprise emails from alertas.empresas@)
+   - Credibom: `from:credibom subject:fatura` (arrives ~3rd of next month)
+   - Via Verde: `from:viaverde OR from:brisa subject:extracto` (arrives ~14th of next month)
+   - Ageas: `ageas fatura 503454109` (from documentacao.digital@ageas.pt)
+   - Nexperience/Vendus: `509442013` or search for FT number (from info@vendus.pt)
+5. Download attachments via Chrome: navigate to email → scroll to attachment → hover → click download icon
+6. Move files from ~/Downloads to `faturas/YYYY-QN/found/`
+7. Get Octa token if not in .env: Chrome → manager.octacode.pt → JS `localStorage.getItem('authToken')` → download as file
+8. Upload via API (3 steps per file): presigned URL → PUT to S3 → notify (batch, once at end)
+   ```bash
+   source .env
+   # Per file: get presigned URL, upload to S3
+   # After all: POST /documentstorage/notify with file list
+   ```
+9. Verify on Octa Manager: Contabilista → MODERNMARATHON → Geral → check year selector
+10. Report what's still missing (portals: Uber Eats, ESLI, Placegar, InvoiceXpress)
 
 ## Insurance Invoices (Seguros)
 
@@ -66,6 +81,38 @@
 - Portal: Fidelidade MyFidelidade (my.fidelidade.pt)
 - Need NIF + password to login
 - Upload via "Pedido de Reembolso" section
+
+## e-Fatura Invoice Categorization (IRS Personal Deductions)
+
+### When
+Annually, before March 2 (deadline for validating previous year's expenses).
+
+### IRS Deduction Categories & Rates
+- **Despesas Gerais Familiares** (Outros/C99): 35%, max 250€/person
+- **Saúde** (C05): 15%, max 1000€ — pharmacies, hospitals, clinics, psychotherapy, health insurance (MetLife, Medis, etc.)
+- **Educação** (C06): 30%, max 800€
+- **Imóveis** (C07): 15%, max 502-700€ — mortgage interest, rent
+- **Lares** (C08): 25%, max 403.75€
+- **Alojamento/restauração** (C03): 15% — restaurants, hotels
+- **Ginásios** (C11): 30% — sports/gym
+- **Transportes públicos** (C10): 100% — monthly passes
+- **Jornais/Revistas** (C12): 100%
+
+### Steps (per invoice)
+1. Navigate to `faturas.portaldasfinancas.gov.pt/consultarDocumentosAdquirente.action`
+2. Check welcome message shows personal NIF (not company)
+3. Click invoice link to open detail page
+4. In "Informação Complementar" section, change "Atividade de Realização da Aquisição" dropdown to correct category
+5. Set "Realizado no âmbito da atividade profissional?" to "Não"
+6. Click "Guardar"
+7. Navigate back to listing, repeat for next invoice
+
+### Common Categorizations (Gonçalo's invoices)
+- EDP, NOS, supermarkets, bank fees → Outros (DGF)
+- Pharmacies, hospitals, clinics, psychotherapy → Saúde
+- MetLife (health insurance) → Saúde
+- BCP/Santander large payments (mortgage) → Imóveis
+- Aegon Santander Não Vida (non-life insurance) → Outros (DGF)
 
 ## Development Workflow
 
