@@ -4,6 +4,23 @@
 
 ---
 
+## Cloudflare Workers / Wrangler
+
+### Wrangler OAuth Expires — Keep Token Fresh
+Wrangler OAuth tokens expire. When deploying dashboard, if you get "Failed to fetch auth token: 400 Bad Request", run `npx wrangler login` (opens browser) then retry. The refresh token also expires, so a full re-login is needed.
+
+### Account ID Required for Multi-Account Users
+If the Cloudflare account has access to multiple accounts, wrangler deploy fails with "More than one account available". Add `account_id = "173040a19332ef9902a322debcfdde59"` to wrangler.toml.
+
+### Worker Code is Bundled — Can't Edit In Place
+`workers_get_worker_code` returns a bundled multipart form. To update the worker, maintain source locally in `dashboard/src/` and deploy with `npx wrangler deploy`. Never try to edit the deployed bundle directly.
+
+### KV Key Prefix Pattern for Multi-Use Namespace
+The `ekus-dashboard-data` KV namespace stores both tasks and memory. Tasks use key `TASKS.md`, memory files use `memory:` prefix (e.g., `memory:MEMORY.md`). The `list({ prefix: "memory:" })` API efficiently filters.
+
+### Local Memory and Cloud Memory Are NOT Auto-Synced
+After moving memory to Cloudflare KV, the local files (auto-memory at `~/.claude/projects/.../memory/MEMORY.md` and project memory at `~/ekus/memory/`) are NOT automatically synced to the cloud dashboard. They will drift apart unless a sync mechanism is added (hook, scheduler step, or dual-write).
+
 ## Software Development
 
 ### Always Use Agent Teams for Complex Tasks
@@ -168,6 +185,35 @@ When writing prompts for `config/jobs.json`, remember:
 - The prompt must include ALL instructions (source .env, IDs, API patterns)
 - Keep prompts focused but complete — include exact list IDs, channel IDs, etc.
 - Test JSON validity after editing: `python3 -c "import json; json.load(open('config/jobs.json'))"`
+- **MCP tools are NOT available** in `claude -p` mode — use curl/bash for everything
+- Add `Do NOT save to memory files` to prevent noisy memory writes from scheduled jobs
+
+### Scheduler Survives Reboots Only If launchd Plist Exists
+- The plist at `~/Library/LaunchAgents/com.ekus.scheduler.plist` must exist and be loaded
+- After a reboot, macOS auto-loads plists from `~/Library/LaunchAgents/` — if the file is gone, nothing runs
+- Always include `RunAtLoad: true` so the scheduler fires immediately on login
+- The install script is `scripts/install-scheduler.sh` — re-run after any OS update/migration
+- **Critical**: The PATH in the plist must include `~/.local/bin` for the `claude` CLI
+
+### Google Calendar API Key ≠ OAuth (No Calendar via curl)
+The `GOOGLE_API_KEY` in `.env` is a simple API key — it works for public APIs but NOT for Calendar (which requires OAuth2 user consent). In automated/scheduled jobs (`claude -p`), MCP Calendar also fails because it needs interactive permission approval. For now, the hourly digest falls back to "Calendario indisponivel" in automated mode. Calendar data only works when the user grants MCP permission interactively.
+
+### `source .env` Doesn't Export to Subprocesses
+Running `source .env` in a Bash tool call makes vars available in that shell, but Python subprocesses (`subprocess.run`, `os.environ`) won't see them. Two solutions:
+1. **Shell-side**: `set -a && source .env && set +a` before calling Python — auto-exports all vars
+2. **Python-side**: Load `.env` from within Python by parsing the file directly (useful when the Python script IS the main command)
+3. **Temp file**: Python writes output (e.g., JSON payload) to `/tmp/`, then bash uses it with `curl -d @/tmp/file` — avoids env var and escaping issues entirely
+4. **urllib in Python**: Use `urllib.request` directly in Python instead of `subprocess.run(["curl", ...])` — avoids env var issues entirely since you can hardcode or read the URL within Python
+
+### .env Values With Spaces Must Be Quoted
+The `GMAIL_APP_PASSWORD` has spaces (Google app passwords are 4 groups of 4 chars). If unquoted, `source .env` treats the second word as a command. Always quote: `VAR="value with spaces"`.
+
+### Use Slack Incoming Webhooks for Outbound Messages
+- Bot tokens (`xoxb-`) require proper OAuth setup and the OAuth page sometimes won't load
+- Incoming Webhooks are simpler: just POST JSON to a URL, no auth headers
+- Webhook URL is self-authenticating — the URL IS the secret
+- Set up via api.slack.com/apps > Incoming Webhooks > Add New Webhook > select channel
+- Limitation: webhooks can only SEND to one channel; for reading messages or sending to multiple channels, you still need a bot token
 
 ### Cron Expression Cheat Sheet
 ```
@@ -259,6 +305,17 @@ The working pattern for automating invoice categorization:
 3. Verify: check for "guardada com sucesso" in page text
 4. Navigate back to `consultarDocumentosAdquirente.action` (don't use history.back())
 Important: The Guardar button handler uses jQuery `.one()` — fires only once per page load.
+
+## Message Checker
+
+### MCP Slack Tools as Fallback for Bot Token
+When the Slack bot token is an `xapp-` app-level token (which can't call `conversations.history`), the MCP `mcp__claude_ai_Slack__slack_read_channel` tool works as an alternative — it uses its own OAuth connection. However, it requires the user to grant permission each time. For the automated scheduler (`claude -p`), this won't work since there's no user to approve. **Fix the root cause**: get a proper `xoxb-` bot token installed.
+
+### Both Channels Must Be Functional for Message Checker
+The check-messages job is useless until at least one channel works:
+- **Slack**: Needs `xoxb-` bot token (not `xapp-`)
+- **WhatsApp**: Needs `wacli` session reconnected (`wacli login`)
+Until fixed, the scheduler job just burns cycles.
 
 ## People
 

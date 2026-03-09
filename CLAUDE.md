@@ -79,8 +79,12 @@ Ekus runs a **continuous task management loop**:
 
 **Dashboard (Cloudflare Workers):**
 - **Live at:** https://ekus-dashboard.goncalo-p-gomes.workers.dev
-- Tasks stored in **Cloudflare KV** — this is the source of truth for the task list
+- **Source code:** `dashboard/src/` (deploy with `cd dashboard && npx wrangler deploy`)
+- Tasks stored in **Cloudflare KV** — source of truth for the task list
+- Memory files also stored in **Cloudflare KV** — source of truth for memory (MEMORY.md, lessons-learned.md, workflows.md, reminders.md)
+- The dashboard has two tabs: **Tasks** (board/list view) and **Memory** (view/edit all memory files)
 - API: `GET /api/tasks` to read, `PUT /api/tasks` to update
+- Memory API: `GET /api/memory` (list all), `GET/PUT/DELETE /api/memory/{filename}` (single file)
 - The dashboard auto-loads and auto-saves to KV
 - There is NO local TASKS.md — always use the Cloudflare API
 
@@ -95,11 +99,31 @@ curl -s -X PUT "https://ekus-dashboard.goncalo-p-gomes.workers.dev/api/tasks" \
   --data-binary "task content here"
 ```
 
+**When reading/writing memory programmatically:**
+```bash
+# List all memory files
+curl -s "https://ekus-dashboard.goncalo-p-gomes.workers.dev/api/memory"
+
+# Read a specific file
+curl -s "https://ekus-dashboard.goncalo-p-gomes.workers.dev/api/memory/MEMORY.md"
+
+# Write a memory file
+curl -s -X PUT "https://ekus-dashboard.goncalo-p-gomes.workers.dev/api/memory/MEMORY.md" \
+  -H "Content-Type: text/plain" \
+  --data-binary "content here"
+```
+
+**Trello <-> Dashboard sync:**
+- The hourly-digest job automatically syncs Trello A Fazer <-> Dashboard Active, and Trello Brevemente <-> Dashboard Waiting On
+- Uses fuzzy title matching to avoid duplicates
+- When adding tasks manually, add to BOTH Trello and Dashboard (or let the hourly sync handle it)
+
 **When receiving a task request** (from any channel):
 1. Create Trello card in the right list (a_fazer/brevemente/eventualmente)
-2. If it has a date/time → also create a calendar event
-3. If recurring → add a scheduler job
-4. Acknowledge via the same channel
+2. Add to Dashboard tasks (Active/Waiting On) via API
+3. If it has a date/time -> also create a calendar event
+4. If recurring -> add a scheduler job
+5. Acknowledge via the same channel
 
 **Triple-action reminders** (ADHD support): Trello card + calendar event + scheduler notification.
 
@@ -108,7 +132,7 @@ curl -s -X PUT "https://ekus-dashboard.goncalo-p-gomes.workers.dev/api/tasks" \
 Cron-based scheduler (launchd). See `.claude/skills/scheduler/SKILL.md`.
 
 **Active jobs:**
-- `hourly-digest` — `0 6-23 * * 1-5` — Task digest (Cloudflare KV + Calendar) → Slack #tudo (C091FP35C95)
+- `hourly-digest` — `0 6-23 * * 1-5` — Trello sync + Task digest (Cloudflare KV + Calendar) -> Slack #tudo (C091FP35C95)
 - `check-messages` — `*/10 6-23 * * *` — Process Slack/WhatsApp commands
 
 **Quick commands:**

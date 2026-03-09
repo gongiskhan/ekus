@@ -5,7 +5,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+export PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 JOBS_FILE="$PROJECT_DIR/config/jobs.json"
 STATE_FILE="$PROJECT_DIR/config/.scheduler-state.json"
 LOG_DIR="$PROJECT_DIR/logs"

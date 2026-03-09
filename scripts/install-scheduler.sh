@@ -20,6 +20,8 @@ cat > "$PLIST_PATH" << EOF
     <array>
         <string>${PROJECT_DIR}/scripts/scheduler-tick.sh</string>
     </array>
+    <key>RunAtLoad</key>
+    <true/>
     <key>StartInterval</key>
     <integer>60</integer>
     <key>WorkingDirectory</key>
@@ -31,7 +33,7 @@ cat > "$PLIST_PATH" << EOF
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
-        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <string>/Users/ggomes/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
     </dict>
 </dict>
 </plist>

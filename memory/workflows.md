@@ -4,15 +4,33 @@
 
 ---
 
+## Dashboard Deployment
+
+### Deploy Ekus Dashboard to Cloudflare Workers
+1. Source files are in `dashboard/src/` (index.js + dashboard.html)
+2. Config in `dashboard/wrangler.toml` (account_id + KV binding)
+3. Ensure wrangler is authenticated: `npx wrangler whoami` (if expired, run `npx wrangler login`)
+4. Deploy: `cd dashboard && npx wrangler deploy`
+5. Verify: `curl -s "https://ekus-dashboard.goncalo-p-gomes.workers.dev/api/tasks"` and `/api/memory`
+
+### Upload Memory Files to Cloud
+```bash
+curl -s -X PUT "https://ekus-dashboard.goncalo-p-gomes.workers.dev/api/memory/MEMORY.md" \
+  -H "Content-Type: text/plain" --data-binary @/path/to/file.md
+```
+Repeat for each memory file (MEMORY.md, lessons-learned.md, workflows.md, reminders.md).
+
 ## Task Management (Automated)
 
-### Hourly Digest (runs every hour 6am–11pm)
-1. Fetch Trello cards from a_fazer, brevemente, eventualmente lists
-2. Fetch today's calendar events (only future ones)
-3. Check primary inbox for notable emails (last hour)
-4. Format digest with sections: Tasks Today, Calendar, Notable Emails, Coming Soon
-5. Send via Slack DM (channel D0ADZB7D733)
-6. Send via WhatsApp (Ekus Alertas group)
+### Hourly Digest (runs every hour 6am-11pm weekdays)
+0. **Trello Sync**: Fetch Trello A Fazer + Brevemente cards AND Dashboard Active + Waiting On tasks. Fuzzy-match titles (case-insensitive, ignore accents/punctuation). Add missing items to both sides. PUT updated dashboard if changed.
+1. Fetch tasks from Cloudflare KV: `curl -s "https://ekus-dashboard.goncalo-p-gomes.workers.dev/api/tasks"`
+2. Parse markdown: `## Active` = current tasks, `## Waiting On` = brevemente
+3. Fetch today's + tomorrow's calendar events via MCP `gcal_list_events` (requires user permission -- falls back to "Calendario indisponivel" in automated runs)
+4. Format as Slack mrkdwn: Agenda, Dev (priority), Outras, Brevemente, Amanha + dashboard link
+5. Send via Slack webhook (`$SLACK_WEBHOOK_URL`) to #tudo (C091FP35C95)
+6. Use `python3` heredoc to build JSON payload (avoids shell escaping issues)
+7. Must `export` env vars before calling Python subprocess (`set -a && source .env && set +a` or explicit `export`)
 
 ### Message Checker (runs every 10 min, 6am–11pm)
 1. Read last-checked timestamps from `config/message-checker-state.json`
@@ -113,6 +131,20 @@ Annually, before March 2 (deadline for validating previous year's expenses).
 - MetLife (health insurance) → Saúde
 - BCP/Santander large payments (mortgage) → Imóveis
 - Aegon Santander Não Vida (non-life insurance) → Outros (DGF)
+
+## Scheduler Debugging / Fix (proven 2026-03-05)
+
+1. Check launchd: `launchctl list | grep ekus` — exit code 0 = OK, 127 = command not found, `-` = not loaded
+2. Check plist exists: `ls ~/Library/LaunchAgents/com.ekus.scheduler.plist`
+3. Check logs: `cat ~/ekus/logs/scheduler.log` and `scheduler-error.log`
+4. Check crontab: `crontab -l`
+5. Common fixes:
+   - Plist missing → run `./scripts/install-scheduler.sh`
+   - Exit 127 → PATH in plist doesn't include `~/.local/bin` (where `claude` lives)
+   - `.env` sourcing errors → check for unquoted values with spaces
+   - Slack not sending → check token type (`xapp-` vs `xoxb-` vs webhook URL)
+6. Test manually: `./scripts/run-job.sh hourly-digest`
+7. Verify ticking: wait 60s, check logs again
 
 ## Development Workflow
 
