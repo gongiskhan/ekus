@@ -1,11 +1,13 @@
 """Ekus Gateway — HTTP server for remote agent execution on Mac Mini.
 
 Accepts job requests over HTTP, spawns Claude Code agents in tmux sessions,
-and tracks their progress via YAML job files.
+and tracks their progress via YAML job files. Also serves the task/memory
+dashboard and API (migrated from Cloudflare Workers).
 
 Based on mac-mini-agent's Listen server, adapted for headless operation.
 """
 
+import json
 import os
 import shutil
 import signal
@@ -13,15 +15,16 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import unquote
 from uuid import uuid4
 
 import yaml
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, PlainTextResponse
 from pydantic import BaseModel
 
-app = FastAPI(title="Ekus Gateway", version="0.1.0")
+app = FastAPI(title="Ekus Gateway", version="0.2.0")
 
 # Allow CORS for dashboard access
 app.add_middleware(
@@ -34,6 +37,13 @@ app.add_middleware(
 JOBS_DIR = Path(__file__).parent / "jobs"
 JOBS_DIR.mkdir(exist_ok=True)
 ARCHIVED_DIR = JOBS_DIR / "archived"
+
+# Data directories for tasks and memory (migrated from Cloudflare KV)
+EKUS_ROOT = Path(__file__).parent.parent.parent
+DATA_DIR = EKUS_ROOT / "data"
+DATA_DIR.mkdir(exist_ok=True)
+TASKS_FILE = DATA_DIR / "tasks.md"
+MEMORY_DIR = EKUS_ROOT / "memory"
 
 
 class JobRequest(BaseModel):
@@ -233,6 +243,79 @@ def get_job_json(job_id: str):
         return yaml.safe_load(f)
 
 
+# ── Tasks API (migrated from Cloudflare KV) ─────────────────────────
+
+@app.get("/api/tasks", response_class=PlainTextResponse)
+def get_tasks():
+    """Return tasks markdown."""
+    if not TASKS_FILE.exists():
+        return ""
+    return TASKS_FILE.read_text()
+
+
+@app.put("/api/tasks")
+async def put_tasks(request: Request):
+    """Update tasks markdown."""
+    body = await request.body()
+    TASKS_FILE.write_text(body.decode("utf-8"))
+    return {"ok": True}
+
+
+# ── Memory API (migrated from Cloudflare KV) ────────────────────────
+
+ALLOWED_MEMORY_FILES = {
+    "MEMORY.md", "lessons-learned.md", "workflows.md", "reminders.md"
+}
+
+
+@app.get("/api/memory")
+def list_memory():
+    """List all memory files and their contents."""
+    files = {}
+    for name in ALLOWED_MEMORY_FILES:
+        path = MEMORY_DIR / name
+        if path.exists():
+            files[name] = path.read_text()
+    return files
+
+
+@app.get("/api/memory/{name:path}", response_class=PlainTextResponse)
+def get_memory(name: str):
+    """Get a single memory file."""
+    name = unquote(name)
+    if name not in ALLOWED_MEMORY_FILES:
+        raise HTTPException(status_code=403, detail="File not allowed")
+    path = MEMORY_DIR / name
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Not found")
+    return path.read_text()
+
+
+@app.put("/api/memory/{name:path}")
+async def put_memory(name: str, request: Request):
+    """Update a single memory file."""
+    name = unquote(name)
+    if name not in ALLOWED_MEMORY_FILES:
+        raise HTTPException(status_code=403, detail="File not allowed")
+    body = await request.body()
+    (MEMORY_DIR / name).write_text(body.decode("utf-8"))
+    return {"ok": True}
+
+
+@app.delete("/api/memory/{name:path}")
+def delete_memory(name: str):
+    """Delete a single memory file."""
+    name = unquote(name)
+    if name not in ALLOWED_MEMORY_FILES:
+        raise HTTPException(status_code=403, detail="File not allowed")
+    path = MEMORY_DIR / name
+    if path.exists():
+        path.unlink()
+    return {"ok": True}
+
+
+# ── UI routes ────────────────────────────────────────────────────────
+
 @app.get("/", response_class=HTMLResponse)
 def chat_ui():
     """Serve the chat UI."""
@@ -240,6 +323,15 @@ def chat_ui():
     if html_path.exists():
         return html_path.read_text()
     return "<h1>Ekus Gateway</h1><p>Chat UI not found.</p>"
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard_ui():
+    """Serve the tasks/memory dashboard."""
+    html_path = Path(__file__).parent / "dashboard.html"
+    if html_path.exists():
+        return html_path.read_text()
+    return "<h1>Dashboard not found</h1>"
 
 
 if __name__ == "__main__":

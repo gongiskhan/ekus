@@ -42,8 +42,8 @@ That's it. Claude reads `CLAUDE.md` automatically and knows how to use all the s
 | 🌐 Browser | Claude for Chrome / agent-browser | `.claude/skills/browser/` |
 | 📧 Email | Gmail MCP | `.claude/skills/email/` |
 | 📅 Calendar | Google Calendar MCP | `.claude/skills/calendar/` |
-| 📋 Tasks | Trello REST API + Cloudflare KV | `.claude/skills/trello/` |
-| 📊 Dashboard | Cloudflare Workers | [Live](https://ekus-dashboard.goncalo-p-gomes.workers.dev) |
+| Tasks | Trello REST API + Mac Mini Gateway | `.claude/skills/trello/` |
+| Dashboard | Mac Mini Gateway | `http://100.90.155.85:7600/dashboard` (Tailscale) |
 | 🔍 Search | Brave API / Browser | `.claude/skills/search/` |
 | 🎙️ Voice | ElevenLabs API | `.claude/skills/voice/` |
 | ⏰ Reminders | Calendar + Trello + local | `.claude/skills/reminders/` |

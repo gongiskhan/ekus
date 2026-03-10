@@ -4,27 +4,18 @@
 
 ---
 
-## Dashboard Deployment
+## Dashboard
 
-### Deploy Ekus Dashboard to Cloudflare Workers
-1. Source files are in `dashboard/src/` (index.js + dashboard.html)
-2. Config in `dashboard/wrangler.toml` (account_id + KV binding)
-3. Ensure wrangler is authenticated: `npx wrangler whoami` (if expired, run `npx wrangler login`)
-4. Deploy: `cd dashboard && npx wrangler deploy`
-5. Verify: `curl -s "https://ekus-dashboard.goncalo-p-gomes.workers.dev/api/tasks"` and `/api/memory`
-
-### Upload Memory Files to Cloud
-```bash
-curl -s -X PUT "https://ekus-dashboard.goncalo-p-gomes.workers.dev/api/memory/MEMORY.md" \
-  -H "Content-Type: text/plain" --data-binary @/path/to/file.md
-```
-Repeat for each memory file (MEMORY.md, lessons-learned.md, workflows.md, reminders.md).
+The dashboard is served from the Mac Mini gateway at `http://100.90.155.85:7600/dashboard` (Tailscale).
+Source files: `mac-mini/gateway/main.py` (API) + `mac-mini/gateway/dashboard.html` (SPA).
+Tasks stored in `data/tasks.md`, memory served from `memory/` directory.
+Deploy: push to git, pull on Mac Mini, restart gateway (`launchctl kickstart -k gui/$(id -u)/com.ekus.gateway`).
 
 ## Task Management (Automated)
 
 ### Hourly Digest (runs every hour 6am-11pm weekdays)
 0. **Trello Sync**: Fetch Trello A Fazer + Brevemente cards AND Dashboard Active + Waiting On tasks. Fuzzy-match titles (case-insensitive, ignore accents/punctuation). Add missing items to both sides. PUT updated dashboard if changed.
-1. Fetch tasks from Cloudflare KV: `curl -s "https://ekus-dashboard.goncalo-p-gomes.workers.dev/api/tasks"`
+1. Fetch tasks from local API: `curl -s "http://localhost:7600/api/tasks"`
 2. Parse markdown: `## Active` = current tasks, `## Waiting On` = brevemente
 3. Fetch today's + tomorrow's calendar events via MCP `gcal_list_events` (requires user permission -- falls back to "Calendario indisponivel" in automated runs)
 4. Format as Slack mrkdwn: Agenda, Dev (priority), Outras, Brevemente, Amanha + dashboard link
@@ -254,3 +245,17 @@ Key gotchas:
 - Claude Code tries macOS Keychain first, falls back to plaintext file
 - Access token expires in 8 hours but auto-refreshes via refresh token
 - Auth codes are single-use — if exchange fails, re-authorize
+
+---
+
+## Mac Mini — Migration from MacBook Pro
+
+Steps to move ekus execution from MacBook Pro to Mac Mini:
+
+1. **Commit and push** all changes from MacBook Pro
+2. **Pull on Mac Mini**: `ssh ggomes@100.90.155.85 "cd ~/Projects/ekus && git pull"`
+3. **Install scheduler**: Copy launchd plist to `~/Library/LaunchAgents/com.ekus.scheduler.plist`, `launchctl load` it
+4. **Install gateway service**: Create `com.ekus.gateway.plist` with KeepAlive, `launchctl load` it
+5. **Set minimal settings.json** on Mac Mini (no plugins, no hooks — they hang `claude -p`)
+6. **Disable local scheduler**: `launchctl unload`, rename plist to `.disabled`
+7. **Verify**: `curl http://100.90.155.85:7600/health`, send a test job, check scheduler log

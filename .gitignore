@@ -10,5 +10,8 @@ secrets/
 .DS_Store
 Thumbs.db
 
+# Data (tasks, local state)
+data/
+
 # Node (if needed for tools)
 node_modules/

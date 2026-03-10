@@ -1305,7 +1305,7 @@
       if (tab === 'tasks') {
         filePathEl.textContent = taskFileHandle ? taskFileName : '';
       } else {
-        filePathEl.textContent = 'Cloudflare KV';
+        filePathEl.textContent = 'Mac Mini';
       }
     }
 
@@ -1316,7 +1316,7 @@
     // ===== TASKS FUNCTIONALITY =====
     // ============================================================
 
-    const isCloudMode = !location.hostname.includes('localhost') && !location.hostname.includes('127.0.0.1') && !location.protocol.startsWith('file');
+    const isCloudMode = !location.protocol.startsWith('file');
 
     let taskFileHandle = null;
     let taskFileName = '';
@@ -2773,7 +2773,7 @@
     if (isCloudMode) {
       loadMemoryFromCloud();
     } else {
-      memoryLoadingState.innerHTML = '<p style="font-size: 16px; color: var(--text-muted);">Memory is cloud-only. Deploy to Cloudflare Workers to use.</p>';
+      memoryLoadingState.innerHTML = '<p style="font-size: 16px; color: var(--text-muted);">Memory unavailable. Gateway API not reachable.</p>';
     }
 
     // Expose functions to onclick handlers

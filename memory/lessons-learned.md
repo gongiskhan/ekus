@@ -4,22 +4,10 @@
 
 ---
 
-## Cloudflare Workers / Wrangler
+## Dashboard & Task Storage
 
-### Wrangler OAuth Expires — Keep Token Fresh
-Wrangler OAuth tokens expire. When deploying dashboard, if you get "Failed to fetch auth token: 400 Bad Request", run `npx wrangler login` (opens browser) then retry. The refresh token also expires, so a full re-login is needed.
-
-### Account ID Required for Multi-Account Users
-If the Cloudflare account has access to multiple accounts, wrangler deploy fails with "More than one account available". Add `account_id = "173040a19332ef9902a322debcfdde59"` to wrangler.toml.
-
-### Worker Code is Bundled — Can't Edit In Place
-`workers_get_worker_code` returns a bundled multipart form. To update the worker, maintain source locally in `dashboard/src/` and deploy with `npx wrangler deploy`. Never try to edit the deployed bundle directly.
-
-### KV Key Prefix Pattern for Multi-Use Namespace
-The `ekus-dashboard-data` KV namespace stores both tasks and memory. Tasks use key `TASKS.md`, memory files use `memory:` prefix (e.g., `memory:MEMORY.md`). The `list({ prefix: "memory:" })` API efficiently filters.
-
-### Local Memory and Cloud Memory Are NOT Auto-Synced
-After moving memory to Cloudflare KV, the local files (auto-memory at `~/.claude/projects/.../memory/MEMORY.md` and project memory at `~/ekus/memory/`) are NOT automatically synced to the cloud dashboard. They will drift apart unless a sync mechanism is added (hook, scheduler step, or dual-write).
+### Cloudflare KV Was Migrated Away (2026-03-10)
+The Cloudflare KV dashboard was introduced by Claude in commit `63a0703` (Feb 27) because the MacBook Pro isn't always on. After migrating ekus to the Mac Mini (always-on, Tailscale on all devices), the Cloudflare dependency was removed. Tasks and memory are now served from the Mac Mini gateway (port 7600) using local files (`data/tasks.md` and `memory/` directory). The `ekus-dashboard` Worker and `ekus-dashboard-data` KV namespace were deleted from Cloudflare.
 
 ## Software Development
 
@@ -262,14 +250,12 @@ Gemini Nano Banana Pro is better for precise logos. Always specify:
 
 ## Task Sync
 
-### Tasks Live in Cloudflare KV (Not Local)
-The task list is stored in Cloudflare KV and served via the dashboard Worker.
-- **Dashboard:** https://ekus-dashboard.goncalo-p-gomes.workers.dev
+### Tasks Live on Mac Mini Gateway
+The task list is stored in `data/tasks.md` on the Mac Mini and served via the gateway API.
+- **Dashboard:** http://100.90.155.85:7600/dashboard (Tailscale)
 - **Read:** `GET /api/tasks`
 - **Write:** `PUT /api/tasks` with `Content-Type: text/plain`
-- There is NO local TASKS.md — always use the API.
-- The Worker source is deployed via wrangler. Cloudflare API token is in `.env` as `CLOUDFARE_API_TOKEN`.
-- KV namespace ID: `03bb45bba2ee4d38806967e7ff02f2ea`
+- Memory files served from `memory/` directory via `/api/memory` endpoints.
 
 ### Never Re-Add Intentionally Removed Tasks
 When syncing tasks with Trello (or any external source), a task present in Trello but absent from the task list does NOT necessarily mean it's missing — it may have been intentionally removed by the user. Only flag genuinely NEW cards (created after the last sync). If a task was previously in the list and is now gone, assume the user removed it on purpose.
@@ -355,6 +341,9 @@ Claude Code stores OAuth credentials in `~/.claude/.credentials.json` (with a le
 
 ### Chrome Extension JS Click > Coordinate Click for OAuth Pages
 On the Claude OAuth authorize page, coordinate-based clicks on the "Authorize" button don't register. Use JavaScript `document.querySelector('button').click()` via `mcp__claude-in-chrome__javascript_tool` instead.
+
+### Deploy Workflow: rsync vs git pull Conflict
+When using `./scripts/mac-mini.sh deploy` (rsync) AND `git pull` on the Mac Mini, they conflict — rsync writes files directly, then `git pull` sees them as local changes and refuses to merge. **Pick one**: either always use `deploy` (rsync) OR always use `git push` + `git pull`. For code in the repo, prefer git push/pull. Reserve rsync deploy for quick iterations during development only.
 
 ### Mac Mini settings.json Must Be Minimal (No Plugins/Hooks)
 The `~/.claude/settings.json` is synced from the MacBook Pro but its plugins, hooks, and status line commands cause `claude -p` to hang indefinitely on the Mac Mini (zero output, no timeout). The Mac Mini needs a **minimal** settings.json with only:

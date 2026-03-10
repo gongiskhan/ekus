@@ -73,28 +73,26 @@ Assign tasks → monitor → verify → shutdown → TeamDelete
 ## Task Management
 
 Ekus runs a **continuous task management loop**:
-- **Hourly digest** (6am–11pm, weekdays) — Cloudflare KV tasks + calendar → Slack #tudo (C091FP35C95)
+- **Hourly digest** (6am-11pm, weekdays) — local tasks + calendar -> Slack #tudo (C091FP35C95)
 - **Message checker** (every 10 min) — reads Slack DM + WhatsApp for new commands
 - See `.claude/skills/task-management/SKILL.md` for full details
 
-**Dashboard (Cloudflare Workers):**
-- **Live at:** https://ekus-dashboard.goncalo-p-gomes.workers.dev
-- **Source code:** `dashboard/src/` (deploy with `cd dashboard && npx wrangler deploy`)
-- Tasks stored in **Cloudflare KV** — source of truth for the task list
-- Memory files also stored in **Cloudflare KV** — source of truth for memory (MEMORY.md, lessons-learned.md, workflows.md, reminders.md)
+**Dashboard (Mac Mini Gateway):**
+- **Live at:** http://100.90.155.85:7600/dashboard (via Tailscale)
+- **Source code:** `mac-mini/gateway/` (dashboard.html + main.py)
+- Tasks stored in `data/tasks.md` — source of truth for the task list
+- Memory files served from `memory/` directory
 - The dashboard has two tabs: **Tasks** (board/list view) and **Memory** (view/edit all memory files)
 - API: `GET /api/tasks` to read, `PUT /api/tasks` to update
 - Memory API: `GET /api/memory` (list all), `GET/PUT/DELETE /api/memory/{filename}` (single file)
-- The dashboard auto-loads and auto-saves to KV
-- There is NO local TASKS.md — always use the Cloudflare API
 
 **When reading/writing tasks programmatically:**
 ```bash
 # Read tasks
-curl -s "https://ekus-dashboard.goncalo-p-gomes.workers.dev/api/tasks"
+curl -s "http://100.90.155.85:7600/api/tasks"
 
 # Write tasks
-curl -s -X PUT "https://ekus-dashboard.goncalo-p-gomes.workers.dev/api/tasks" \
+curl -s -X PUT "http://100.90.155.85:7600/api/tasks" \
   -H "Content-Type: text/plain" \
   --data-binary "task content here"
 ```
@@ -102,13 +100,13 @@ curl -s -X PUT "https://ekus-dashboard.goncalo-p-gomes.workers.dev/api/tasks" \
 **When reading/writing memory programmatically:**
 ```bash
 # List all memory files
-curl -s "https://ekus-dashboard.goncalo-p-gomes.workers.dev/api/memory"
+curl -s "http://100.90.155.85:7600/api/memory"
 
 # Read a specific file
-curl -s "https://ekus-dashboard.goncalo-p-gomes.workers.dev/api/memory/MEMORY.md"
+curl -s "http://100.90.155.85:7600/api/memory/MEMORY.md"
 
 # Write a memory file
-curl -s -X PUT "https://ekus-dashboard.goncalo-p-gomes.workers.dev/api/memory/MEMORY.md" \
+curl -s -X PUT "http://100.90.155.85:7600/api/memory/MEMORY.md" \
   -H "Content-Type: text/plain" \
   --data-binary "content here"
 ```
@@ -132,7 +130,7 @@ curl -s -X PUT "https://ekus-dashboard.goncalo-p-gomes.workers.dev/api/memory/ME
 Cron-based scheduler (launchd). See `.claude/skills/scheduler/SKILL.md`.
 
 **Active jobs:**
-- `hourly-digest` — `0 6-23 * * 1-5` — Trello sync + Task digest (Cloudflare KV + Calendar) -> Slack #tudo (C091FP35C95)
+- `hourly-digest` — `0 6-23 * * 1-5` — Trello sync + Task digest (local tasks + Calendar) -> Slack #tudo (C091FP35C95)
 - `check-messages` — `*/10 6-23 * * *` — Process Slack/WhatsApp commands
 
 **Quick commands:**
