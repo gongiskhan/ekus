@@ -211,3 +211,46 @@ Account: `goncalo-paraiso-gomes.vendus.pt` (personal) or `modern-marathon.vendus
 ### Key IDs
 - `form_type_id`: P=Produto, S=Serviço
 - `form_tax_id`: RED=6% (Taxa Reduzida), ISE=0% (Isento), INT=13% (Intermédia), NOR=23% (Normal)
+
+---
+
+## Mac Mini — Claude Code Auth (Manual PKCE Flow)
+
+When `claude auth login` fails on the Mac Mini (raw terminal UI can't accept piped input), use this manual PKCE flow:
+
+1. **Generate PKCE pair on Mac Mini:**
+   ```bash
+   ssh ggomes@100.90.155.85 "export PATH=/opt/homebrew/bin:\$PATH && node -e \"
+   const crypto = require('crypto');
+   const v = crypto.randomBytes(32).toString('base64url');
+   const c = crypto.createHash('sha256').update(v).digest('base64url');
+   const s = crypto.randomBytes(32).toString('base64url');
+   console.log(JSON.stringify({ verifier: v, challenge: c, state: s }));
+   \""
+   ```
+
+2. **Build and open auth URL in local browser** (where you're logged into claude.ai):
+   ```
+   https://claude.ai/oauth/authorize?code=true&client_id=9d1c250a-e61b-44d9-88ed-5944d1962f5e&response_type=code&redirect_uri=https%3A%2F%2Fplatform.claude.com%2Foauth%2Fcode%2Fcallback&scope=org%3Acreate_api_key+user%3Aprofile+user%3Ainference+user%3Asessions%3Aclaude_code+user%3Amcp_servers&code_challenge={CHALLENGE}&code_challenge_method=S256&state={STATE}
+   ```
+
+3. **Click "Authorize"**, get redirected to callback URL with `?code=XXX`
+
+4. **Exchange code for tokens on Mac Mini** (write Node.js script to `/tmp/exchange-token.js`):
+   - POST `https://platform.claude.com/v1/oauth/token` with JSON body:
+     ```json
+     { "grant_type": "authorization_code", "code": "XXX", "redirect_uri": "https://platform.claude.com/oauth/code/callback", "client_id": "9d1c250a-e61b-44d9-88ed-5944d1962f5e", "code_verifier": "{VERIFIER}", "state": "{STATE}" }
+     ```
+
+5. **Write credentials** to `~/.claude/.credentials.json` (note the leading dot!):
+   ```json
+   { "claudeAiOauth": { "accessToken": "...", "refreshToken": "...", "expiresAt": <now + expires_in * 1000>, "scopes": "..." } }
+   ```
+
+6. **Verify**: `claude auth status` should show `loggedIn: true`
+
+Key gotchas:
+- File is `.credentials.json` (with leading dot), NOT `credentials.json`
+- Claude Code tries macOS Keychain first, falls back to plaintext file
+- Access token expires in 8 hours but auto-refreshes via refresh token
+- Auth codes are single-use — if exchange fails, re-authorize

@@ -162,6 +162,17 @@ Done tasks get `closed=true` (archived), never deleted.
 3. Create missing cards, archive done ones
 4. Never create duplicates — always check first
 
+### Archive via Form Body, Not Query String
+Use `-d "closed=true"` (form body) instead of `?closed=true` (query string). The query string version intermittently returns "missing scopes". Some cards still fail — likely a token permission issue for cards created by other members.
+
+## Hourly Digest
+
+### Python Subprocess Doesn't Inherit Shell Env Vars
+`source .env` sets variables in the current shell but does NOT export them. Python's `os.environ` only sees exported variables. Fix: `source .env && export SLACK_WEBHOOK_URL && python3 << 'PYEOF'`. Alternatively, use `set -a; source .env; set +a` to auto-export all sourced vars.
+
+### Google Calendar MCP Requires User Permission
+The `gcal_list_events` MCP tool requires interactive user approval. In `claude -p` (non-interactive), this silently fails. For automated digests, either pre-approve the tool or use the Google Calendar REST API directly with an API key/OAuth token.
+
 ## Scheduling & Reminders
 
 ### Triple-Action Reminders (ADHD Support)
@@ -316,6 +327,40 @@ The check-messages job is useless until at least one channel works:
 - **Slack**: Needs `xoxb-` bot token (not `xapp-`)
 - **WhatsApp**: Needs `wacli` session reconnected (`wacli login`)
 Until fixed, the scheduler job just burns cycles.
+
+## Mac Mini Remote Automation
+
+### Claude Code Auth on Remote Machine — Copy Credentials Won't Work If Token Expired
+Copying `~/.claude/credentials.json` from one machine to another only works if the access token is still valid. If expired, the refresh token needs the original machine's auth session context. The safest approach: open the `claude auth login` OAuth URL from the remote machine in a **local browser** (where you're already logged into claude.ai), click "Authorize", then copy the auth code back.
+
+### `claude auth login` Uses Raw Terminal Input
+The CLI uses a Node.js terminal UI (likely Ink) that reads input in raw mode. This means:
+- `tmux send-keys` doesn't reliably paste the OAuth code
+- `expect`/`send` also fails with TIMEOUT_AFTER_CODE
+- The auth URL approach (opening in a browser) + copying the code back is the only reliable programmatic method
+
+### Mac Mini SSH — Always Prefix PATH
+Homebrew on Mac Mini is at `/opt/homebrew/bin` but not in default SSH PATH. Always prefix commands with: `export PATH=/opt/homebrew/bin:$PATH`
+
+### Mac Mini Gateway — Start Pattern
+```bash
+# On Mac Mini:
+cd ~/Projects/ekus/mac-mini/gateway
+nohup uv run python main.py > /tmp/ekus-gateway.log 2>&1 &
+```
+Management script: `./scripts/mac-mini.sh start|stop|restart|status`
+
+### Claude Code Credentials File Is `.credentials.json` (With Leading Dot)
+Claude Code stores OAuth credentials in `~/.claude/.credentials.json` (with a leading dot), NOT `~/.claude/credentials.json`. On macOS it tries the Keychain first, then falls back to this plaintext file. If you write credentials to the wrong filename, `claude auth status` will report `loggedIn: false`.
+
+### Chrome Extension JS Click > Coordinate Click for OAuth Pages
+On the Claude OAuth authorize page, coordinate-based clicks on the "Authorize" button don't register. Use JavaScript `document.querySelector('button').click()` via `mcp__claude-in-chrome__javascript_tool` instead.
+
+### .env Already Deployed to Mac Mini
+The `./scripts/mac-mini.sh deploy` rsync excludes `.env` (to avoid overwriting). The `.env` was manually copied earlier and has all the same keys as the local one. If new keys are added locally, they must be manually copied to the Mac Mini.
+
+### Headless Worker — Use tmux -d, Not Terminal.app
+The original mac-mini-agent used `osascript` to open Terminal.app windows. For headless/SSH operation, use `tmux new-session -d -s name -c cwd` instead. This works over SSH without a GUI session.
 
 ## People
 

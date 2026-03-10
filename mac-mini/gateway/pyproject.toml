@@ -1,0 +1,10 @@
+[project]
+name = "ekus-gateway"
+version = "0.1.0"
+description = "Ekus Gateway — HTTP server for remote agent execution on Mac Mini"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "pyyaml",
+]

@@ -147,6 +147,31 @@ Cron-based scheduler (launchd). See `.claude/skills/scheduler/SKILL.md`.
 For one-shot reminders, prefer adding a crontab entry that self-removes after firing.
 For recurring tasks, add to `config/jobs.json` and install the scheduler.
 
+## Mac Mini (Remote Agent Sandbox)
+
+Ekus can dispatch agent jobs and automation tasks to a Mac Mini over Tailscale.
+See `.claude/skills/mac-mini/SKILL.md` for full API reference.
+
+**Connection:**
+- IP: `100.90.155.85` (Tailscale), SSH user: `ggomes`
+- Gateway: `http://100.90.155.85:7600`
+
+**Quick commands:**
+```bash
+./scripts/mac-mini.sh status          # Health check + jobs
+./scripts/mac-mini.sh start|stop      # Gateway control
+./scripts/mac-mini.sh deploy          # Rsync ekus to Mac Mini
+./scripts/mac-mini.sh send "prompt"   # Run a Claude agent job
+./scripts/mac-mini.sh jobs            # List jobs
+```
+
+**Automation:**
+- `POST /automation/steer` — GUI automation (screenshot, click, type, OCR)
+- `POST /automation/drive` — Terminal automation (tmux sessions, commands)
+- `POST /job` — Spawn Claude Code agent on Mac Mini
+
+**Python client:** `from mac_mini.client.gateway import GatewayClient`
+
 ## Knowledge Base
 
 Before starting any task involving a skill or domain already in the knowledge base:
