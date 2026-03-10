@@ -356,6 +356,13 @@ Claude Code stores OAuth credentials in `~/.claude/.credentials.json` (with a le
 ### Chrome Extension JS Click > Coordinate Click for OAuth Pages
 On the Claude OAuth authorize page, coordinate-based clicks on the "Authorize" button don't register. Use JavaScript `document.querySelector('button').click()` via `mcp__claude-in-chrome__javascript_tool` instead.
 
+### Mac Mini settings.json Must Be Minimal (No Plugins/Hooks)
+The `~/.claude/settings.json` is synced from the MacBook Pro but its plugins, hooks, and status line commands cause `claude -p` to hang indefinitely on the Mac Mini (zero output, no timeout). The Mac Mini needs a **minimal** settings.json with only:
+```json
+{ "permissions": {"defaultMode": "default"}, "skipDangerousModePermissionPrompt": true, "promptSuggestionEnabled": false, "effortLevel": "high" }
+```
+The plugins (context7, frontend-design, etc.) try to connect to MCP servers or load resources that aren't available headless. The hooks reference `terminal-notifier` which isn't installed. Either causes indefinite hang.
+
 ### .env Already Deployed to Mac Mini
 The `./scripts/mac-mini.sh deploy` rsync excludes `.env` (to avoid overwriting). The `.env` was manually copied earlier and has all the same keys as the local one. If new keys are added locally, they must be manually copied to the Mac Mini.
 
