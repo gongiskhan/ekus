@@ -1,5 +1,1 @@
-# Reminders
-
-*Active reminders tracked here as backup to calendar + Trello*
-
----
+/Users/ggomes/Documents/obsidian-vault/Ekus/Memory/reminders.md

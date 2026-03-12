@@ -82,7 +82,7 @@ Ekus runs a **continuous task management loop**:
 - **Frontend source:** `ekus-app/` (Next.js static export, built to `out/`, served as `mac-mini/gateway/static/`)
 - **Backend source:** `mac-mini/gateway/main.py` (FastAPI)
 - Tasks stored in `data/tasks.md` — source of truth for the task list
-- Memory files served from `memory/` directory
+- Memory files served from `memory/` directory (symlinks to Obsidian vault)
 - 4 tabs: **Chat** (primary, with SSE streaming), **Tasks** (kanban), **Scheduler** (CRUD), **Memory** (view/edit)
 - API: `GET /api/tasks` to read, `PUT /api/tasks` to update
 - Memory API: `GET /api/memory` (list all), `GET/PUT/DELETE /api/memory/{filename}` (single file)
@@ -175,18 +175,32 @@ See `.claude/skills/mac-mini/SKILL.md` for full API reference.
 
 **Python client:** `from mac_mini.client.gateway import GatewayClient`
 
-## Knowledge Base
+## Knowledge Base (Obsidian)
+
+All memory/knowledge files live in the **Obsidian vault** at `~/Documents/obsidian-vault/Ekus/Memory/`.
+Local `memory/` directory has symlinks pointing there. Edit in Obsidian for the best experience.
 
 Before starting any task involving a skill or domain already in the knowledge base:
 1. Read `memory/lessons-learned.md` — scan for relevant entries
 2. Read `memory/workflows.md` — check if a proven process exists
 
-This takes seconds and prevents re-discovering known solutions.
-
 Quick reference:
 - `memory/lessons-learned.md` — Hard-won knowledge, mistakes to avoid
 - `memory/workflows.md` — Step-by-step processes for common tasks
 - `memory/reminders.md` — Pending reminders
+
+Obsidian vault structure:
+```
+~/Documents/obsidian-vault/
+├── Projects/
+├── Ekus/
+│   ├── Ekus.md          — Index note
+│   ├── tasks.md         — Task list (read-only copy, source of truth on Mac Mini)
+│   └── Memory/
+│       ├── lessons-learned.md  ← symlinked from ekus/memory/
+│       ├── workflows.md        ← symlinked from ekus/memory/
+│       └── reminders.md        ← symlinked from ekus/memory/
+```
 
 ## Memory & Auto-Learning
 
@@ -196,9 +210,9 @@ You have three memory stores. Know which to use:
 
 | File | Purpose | What goes here | Max size |
 |------|---------|---------------|----------|
-| `~/.claude/projects/-Users-ggomes-ekus/memory/MEMORY.md` | Auto-loaded context | Key facts: account details, user preferences, API endpoints, credentials locations | 200 lines |
-| `memory/lessons-learned.md` | Knowledge base | Gotchas, debugging tips, tool quirks, things that failed, things that worked unexpectedly | No cap |
-| `memory/workflows.md` | Process library | Repeatable step-by-step procedures (3+ steps) that worked | No cap |
+| `~/.claude/projects/-Users-ggomes-Projects-ekus/memory/MEMORY.md` | Auto-loaded context | Key facts, preferences, vault paths | 200 lines |
+| `memory/lessons-learned.md` (Obsidian) | Knowledge base | Gotchas, debugging tips, tool quirks, failures | No cap |
+| `memory/workflows.md` (Obsidian) | Process library | Repeatable step-by-step procedures (3+ steps) | No cap |
 
 ### Post-Task: Auto-Learning (MANDATORY)
 
@@ -288,6 +302,9 @@ Available skills:
 - **reminders** — Schedule reminders and follow-ups
 - **scheduler** — Cron-based task scheduling (launchd + crontab)
 - **faturas** — Monthly invoice collection for Modern Marathon LDA + upload to Octa Manager
+- **obsidian-markdown** — Obsidian Flavored Markdown (wikilinks, callouts, properties)
+- **obsidian-cli** — Interact with Obsidian vaults via CLI
+- **obsidian-bases** — Obsidian Bases (.base files) for database-like views
 
 ## Formatting
 

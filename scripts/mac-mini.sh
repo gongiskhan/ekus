@@ -95,7 +95,7 @@ case "${1:-help}" in
             rm -rf /Users/ggomes/ekus/mac-mini/gateway/static
             cp -r /Users/ggomes/ekus/ekus-app/out /Users/ggomes/ekus/mac-mini/gateway/static
         fi
-        rsync -avz --delete \
+        rsync -avzL --delete \
             --exclude 'node_modules' \
             --exclude '.DS_Store' \
             --exclude 'dashboard/node_modules' \
