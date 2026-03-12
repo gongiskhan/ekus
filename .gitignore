@@ -15,3 +15,7 @@ data/
 
 # Node (if needed for tools)
 node_modules/
+
+out
+.next
+logs

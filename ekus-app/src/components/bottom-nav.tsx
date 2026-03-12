@@ -35,6 +35,16 @@ const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     ),
   },
   {
+    id: 'notes',
+    label: 'Notes',
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3Z" />
+        <path d="M14 3v4a2 2 0 0 0 2 2h4" />
+      </svg>
+    ),
+  },
+  {
     id: 'memory',
     label: 'Memory',
     icon: (

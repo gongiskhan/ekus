@@ -47,4 +47,10 @@ export interface MemoryFile {
   modified: string;
 }
 
-export type Tab = 'chat' | 'tasks' | 'scheduler' | 'memory';
+export interface Note {
+  id: string;
+  content: string;
+  created_at: string;
+}
+
+export type Tab = 'chat' | 'tasks' | 'scheduler' | 'memory' | 'notes';

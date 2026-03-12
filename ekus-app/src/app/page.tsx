@@ -9,6 +9,7 @@ import { ChatTab } from '@/features/chat/chat-tab';
 import { TasksTab } from '@/features/tasks/tasks-tab';
 import { SchedulerTab } from '@/features/scheduler/scheduler-tab';
 import { MemoryTab } from '@/features/memory/memory-tab';
+import { NotesTab } from '@/features/notes/notes-tab';
 
 function HealthIndicator() {
   const [status, setStatus] = useState<'checking' | 'online' | 'offline'>('checking');
@@ -68,6 +69,7 @@ export default function Home() {
         {activeTab === 'chat' && <ChatTab />}
         {activeTab === 'tasks' && <TasksTab />}
         {activeTab === 'scheduler' && <SchedulerTab />}
+        {activeTab === 'notes' && <NotesTab />}
         {activeTab === 'memory' && <MemoryTab />}
       </main>
 
