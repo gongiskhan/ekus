@@ -7,4 +7,5 @@ dependencies = [
     "fastapi",
     "uvicorn",
     "pyyaml",
+    "python-multipart",
 ]

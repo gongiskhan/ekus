@@ -4,12 +4,13 @@
 
 ---
 
-## Dashboard
+## Dashboard (Ekus App)
 
-The dashboard is served from the Mac Mini gateway at `http://100.90.155.85:7600/dashboard` (Tailscale).
-Source files: `mac-mini/gateway/main.py` (API) + `mac-mini/gateway/dashboard.html` (SPA).
-Tasks stored in `data/tasks.md`, memory served from `memory/` directory.
-Deploy: push to git, pull on Mac Mini, restart gateway (`launchctl kickstart -k gui/$(id -u)/com.ekus.gateway`).
+The Ekus App is a Next.js static export served from the Mac Mini gateway at `http://100.90.155.85:7600/` (Tailscale).
+Frontend: `ekus-app/` (Next.js, builds to `out/`, copied to `mac-mini/gateway/static/`).
+Backend: `mac-mini/gateway/main.py` (FastAPI v0.3.0).
+4 tabs: Chat (SSE streaming), Tasks (kanban), Scheduler (CRUD), Memory (view/edit).
+Deploy: `./scripts/mac-mini.sh deploy` (builds Next.js, rsyncs, restarts gateway).
 
 ## Task Management (Automated)
 

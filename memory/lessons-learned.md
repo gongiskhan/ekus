@@ -7,7 +7,13 @@
 ## Dashboard & Task Storage
 
 ### Cloudflare KV Was Migrated Away (2026-03-10)
-The Cloudflare KV dashboard was introduced by Claude in commit `63a0703` (Feb 27) because the MacBook Pro isn't always on. After migrating ekus to the Mac Mini (always-on, Tailscale on all devices), the Cloudflare dependency was removed. Tasks and memory are now served from the Mac Mini gateway (port 7600) using local files (`data/tasks.md` and `memory/` directory). The `ekus-dashboard` Worker and `ekus-dashboard-data` KV namespace were deleted from Cloudflare.
+The Cloudflare KV dashboard was introduced by Claude in commit `63a0703` (Feb 27) because the MacBook Pro isn't always on. After migrating ekus to the Mac Mini (always-on, Tailscale on all devices), the Cloudflare dependency was removed. Tasks and memory are now served from the Mac Mini gateway (port 7600) using local files (`data/tasks.md` and `memory/` directory). The `ekus-dashboard` Worker and `ekus-dashboard-data` KV namespace were deleted from Cloudflare. The `calendar-blockify-proxy` Worker was kept (unrelated). Joaquim's account (`1bae6fbaa2224005462fbbff7051ac05`) was not touched.
+
+### Dashboard isCloudMode Check
+The dashboard SPA has an `isCloudMode` variable that controls whether it auto-loads from the API. Originally it excluded `localhost` and `127.0.0.1`. For the gateway (accessed via Tailscale IP), this was simplified to just `!location.protocol.startsWith('file')` so it always loads from the API when served over HTTP.
+
+### MEMORY.md Lives in Auto-Memory, Not Project Memory
+The `MEMORY.md` auto-memory file is at `~/.claude/projects/-Users-ggomes-ekus/memory/MEMORY.md`, NOT in the project's `memory/` directory. The gateway memory API serves from `memory/` (lessons-learned.md, workflows.md, reminders.md), so MEMORY.md won't appear in the dashboard memory tab — and that's fine, since it's managed by Claude Code automatically.
 
 ## Software Development
 
@@ -49,6 +55,12 @@ The browser parser gets confused. Use string concatenation or escape sequences.
 
 ### Roadmap/Config Changes = Commit + Push Immediately
 When asked for changes to roadmaps, configs, or docs — always commit and push right away.
+
+### Parallel Agent Workers vs Full Agent Teams
+For large projects where work streams touch non-overlapping files (e.g., backend API vs frontend app), use parallel `Agent` tool calls with `run_in_background: true` instead of the full `TeamCreate`/`TaskCreate` flow. Simpler, less overhead, and just as effective when there are no inter-agent dependencies. Reserve Agent Teams for cases where agents need to communicate mid-task (e.g., one agent's output feeds another's input).
+
+### dashboard.html Is Too Large to Read in One Go
+The file exceeds 25k tokens. Read in chunks with `offset` + `limit` params, or search for specific sections with Grep.
 
 ## Email
 

@@ -1,7 +1,8 @@
 """Job worker — runs a Claude Code agent in a headless tmux session.
 
 Creates a detached tmux session, sends the claude command with sentinel
-markers, polls for completion, then updates the job YAML.
+markers, polls for completion, writes incremental output to a log file,
+then updates the job YAML.
 
 Adapted from mac-mini-agent for headless operation (no Terminal.app needed).
 """
@@ -18,8 +19,10 @@ from pathlib import Path
 import yaml
 
 SENTINEL_PREFIX = "__JOBDONE_"
-POLL_INTERVAL = 2.0
+POLL_INTERVAL = 0.5
 EKUS_ROOT = Path(__file__).parent.parent.parent
+# Pattern to match the shell prompt line that appears after command completes
+SHELL_PROMPT_RE = re.compile(r"^\S+@\S+\s+\S+\s*(%|\$)\s*$")
 
 
 def _tmux(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -50,33 +53,54 @@ def _send_keys(session: str, keys: str) -> None:
 
 
 def _capture_pane(session: str) -> str:
-    result = _tmux("capture-pane", "-p", "-t", f"{session}:", "-S", "-500")
+    result = _tmux("capture-pane", "-p", "-t", f"{session}:", "-S", "-")
     return result.stdout
 
 
-def _wait_for_sentinel(session: str, token: str, timeout: int = 0) -> int:
-    """Poll until sentinel appears. timeout=0 means wait forever."""
-    pattern = re.compile(
+def _wait_for_sentinel(session: str, token: str, log_path: Path, baseline: int = 0, timeout: int = 0) -> int:
+    """Poll until sentinel appears. Write incremental output to log file.
+
+    Uses a baseline line count to skip the initial command echo (which can
+    wrap across many lines in tmux). Only lines beyond baseline are logged,
+    and sentinel markers are always filtered out.
+    """
+    sentinel_pattern = re.compile(
         rf"^{re.escape(SENTINEL_PREFIX)}{token}:(\d+)\s*$", re.MULTILINE
     )
+    last_line_count = baseline
     start = time.time()
+
     while True:
         time.sleep(POLL_INTERVAL)
         if timeout > 0 and (time.time() - start) > timeout:
-            return -1  # Timeout
+            return -1
+
         captured = _capture_pane(session)
-        match = pattern.search(captured)
+        lines = captured.rstrip('\n').split('\n')
+
+        # Write new lines to log (skip baseline + sentinel)
+        if len(lines) > last_line_count:
+            new_lines = lines[last_line_count:]
+            with open(log_path, 'a') as f:
+                for line in new_lines:
+                    if SENTINEL_PREFIX in line:
+                        continue
+                    if SHELL_PROMPT_RE.match(line.strip()):
+                        continue
+                    f.write(line + '\n')
+            last_line_count = len(lines)
+
+        match = sentinel_pattern.search(captured)
         if match:
             return int(match.group(1))
 
 
 def main():
-    if len(sys.argv) < 3:
-        print("Usage: worker.py <job_id> <prompt>")
+    if len(sys.argv) < 2:
+        print("Usage: worker.py <job_id>")
         sys.exit(1)
 
     job_id = sys.argv[1]
-    prompt = sys.argv[2]
 
     jobs_dir = Path(__file__).parent / "jobs"
     job_file = jobs_dir / f"{job_id}.yaml"
@@ -84,6 +108,17 @@ def main():
     if not job_file.exists():
         print(f"Job file not found: {job_file}")
         sys.exit(1)
+
+    # Read prompt from job YAML
+    with open(job_file) as f:
+        job_data = yaml.safe_load(f)
+
+    prompt = job_data.get("full_prompt")
+    if not prompt:
+        print(f"No full_prompt found in job file: {job_file}")
+        sys.exit(1)
+
+    log_path = Path(job_data.get("log_file", str(jobs_dir / f"{job_id}.log")))
 
     # Use ekus project root as working directory for claude
     working_dir = str(EKUS_ROOT)
@@ -114,8 +149,17 @@ def main():
         # Create headless tmux session
         _create_session(session_name, working_dir)
 
+        # Increase scrollback buffer for full capture
+        _tmux("set-option", "-t", session_name, "history-limit", "50000")
+
         # Send the wrapped command
         _send_keys(session_name, wrapped)
+
+        # Wait for the command to echo in tmux, then capture baseline
+        # so we skip all the shell command lines in the log output
+        time.sleep(1.5)
+        baseline_text = _capture_pane(session_name)
+        baseline_lines = len(baseline_text.rstrip('\n').split('\n'))
 
         # Update job with session info
         with open(job_file) as f:
@@ -125,7 +169,7 @@ def main():
             yaml.dump(data, f, default_flow_style=False, sort_keys=False)
 
         # Wait for completion — no timeout (agent runs until done)
-        exit_code = _wait_for_sentinel(session_name, token)
+        exit_code = _wait_for_sentinel(session_name, token, log_path, baseline=baseline_lines)
 
     except Exception as e:
         exit_code = 1
@@ -145,7 +189,7 @@ def main():
     with open(job_file, "w") as f:
         yaml.dump(data, f, default_flow_style=False, sort_keys=False)
 
-    # Clean up
+    # Clean up temp prompt file (keep log file for later reading)
     prompt_tmp.unlink(missing_ok=True)
     if _session_exists(session_name):
         _tmux("kill-session", "-t", session_name, check=False)

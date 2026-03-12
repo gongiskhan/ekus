@@ -1,0 +1,72 @@
+Job: hourly-digest
+Time: 2026-03-11-23-00
+Prompt: You are Ekus running the hourly digest. Working directory: ~/ekus
+
+STEP 0: Sync Trello <-> Dashboard tasks
+source .env
+Fetch Trello 'A Fazer' cards: curl -s "https://api.trello.com/1/lists/692ef0efcda3c6ad22f446b0/cards?key=$TRELLO_KEY&token=$TRELLO_TOKEN&fields=name,id"
+Fetch Trello 'Brevemente' cards: curl -s "https://api.trello.com/1/lists/5a38df428080f0d513df0672/cards?key=$TRELLO_KEY&token=$TRELLO_TOKEN&fields=name,id"
+Fetch Dashboard tasks: curl -s "http://localhost:7600/api/tasks"
+Parse the dashboard markdown: ## Active = A Fazer, ## Waiting On = Brevemente.
+Compare both sides using fuzzy title matching (case-insensitive, ignore punctuation/accents, match partial titles).
+For each Trello A Fazer card NOT in Dashboard Active, add it as: - [ ] **Card Name**
+For each Trello Brevemente card NOT in Dashboard Waiting On, add it as: - [ ] **Card Name**
+For each Dashboard Active task NOT in Trello A Fazer, create a Trello card: curl -s -X POST "https://api.trello.com/1/cards?key=$TRELLO_KEY&token=$TRELLO_TOKEN" -d "idList=692ef0efcda3c6ad22f446b0" --data-urlencode "name=<task title>"
+For each Dashboard Waiting On task NOT in Trello Brevemente, create a Trello card: curl -s -X POST "https://api.trello.com/1/cards?key=$TRELLO_KEY&token=$TRELLO_TOKEN" -d "idList=5a38df428080f0d513df0672" --data-urlencode "name=<task title>"
+Note: CSG: i18n and CSG: validacoes are in Dashboard Active but Trello Brevemente — this is intentional (different priority views), do NOT move or duplicate them.
+If dashboard was updated, PUT the new markdown to the API.
+Skip items in ## Done.
+
+STEP 1: Fetch tasks from local API
+Run: curl -s "http://localhost:7600/api/tasks"
+Parse the markdown: ## Active = current tasks, ## Waiting On = brevemente items.
+Each task line: - [ ] **Title** - description
+
+STEP 2: Fetch calendar events
+Run: curl -s "https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=$(date -u +%Y-%m-%dT00:00:00Z)&timeMax=$(date -u +%Y-%m-%dT23:59:59Z)&singleEvents=true&orderBy=startTime&key=$GOOGLE_API_KEY" (source .env first)
+If calendar API fails or no GOOGLE_API_KEY, skip calendar section and note 'Calendario indisponivel'.
+Also try tomorrow's events with tomorrow's date.
+
+STEP 3: Format the digest as Slack mrkdwn
+Format example:
+:lizard: _Task List -- Qui 05/03, 09:00_
+
+:alarm_clock: *Agenda de Hoje*
+- List today's events with times. ~strikethrough~ past events. Mark current/next with <- _agora_ / _proximo_
+
+:wrench: *Dev (por prioridade)*
+1. dev-related Active tasks
+
+:clipboard: *Outras*
+- Non-dev Active tasks
+
+:date: *Brevemente*
+- Waiting On tasks
+
+:calendar: *Amanha*
+- Tomorrow's events (only if any)
+
+Use Portuguese day names: Seg, Ter, Qua, Qui, Sex.
+
+At the very end of the message, add a link to the dashboard:
+<http://100.90.155.85:7600|:kanban: Ekus App>
+
+STEP 4: Send via Slack Webhook
+source .env
+Build the JSON payload with the formatted message. Use python3 to properly escape the message for JSON.
+Example:
+python3 -c "
+import json, subprocess
+msg = '''<your formatted message>'''
+payload = json.dumps({'text': msg})
+subprocess.run(['curl', '-s', '-X', 'POST', '$SLACK_WEBHOOK_URL', '-H', 'Content-type: application/json', '--data-raw', payload])
+"
+The webhook URL is in $SLACK_WEBHOOK_URL env var.
+
+Keep concise. Bullet points, no prose. Do NOT save to memory files.
+---
+✅ Digest sent to Slack.
+
+**Sync result:** Trello and Dashboard are already in sync — all A Fazer cards match Active, all Brevemente cards match Waiting On. No changes needed.
+
+**Calendar:** Unavailable (MCP permission not granted). Noted as "Calendario indisponivel" in the digest.

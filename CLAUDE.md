@@ -78,13 +78,18 @@ Ekus runs a **continuous task management loop**:
 - See `.claude/skills/task-management/SKILL.md` for full details
 
 **Dashboard (Mac Mini Gateway):**
-- **Live at:** http://100.90.155.85:7600/dashboard (via Tailscale)
-- **Source code:** `mac-mini/gateway/` (dashboard.html + main.py)
+- **Live at:** http://100.90.155.85:7600/ (via Tailscale)
+- **Frontend source:** `ekus-app/` (Next.js static export, built to `out/`, served as `mac-mini/gateway/static/`)
+- **Backend source:** `mac-mini/gateway/main.py` (FastAPI)
 - Tasks stored in `data/tasks.md` — source of truth for the task list
 - Memory files served from `memory/` directory
-- The dashboard has two tabs: **Tasks** (board/list view) and **Memory** (view/edit all memory files)
+- 4 tabs: **Chat** (primary, with SSE streaming), **Tasks** (kanban), **Scheduler** (CRUD), **Memory** (view/edit)
 - API: `GET /api/tasks` to read, `PUT /api/tasks` to update
 - Memory API: `GET /api/memory` (list all), `GET/PUT/DELETE /api/memory/{filename}` (single file)
+- Scheduler API: `GET/POST /api/scheduler/jobs`, `PUT/DELETE /api/scheduler/jobs/{id}`, `POST .../run`, `GET .../logs`
+- SSE streaming: `GET /api/job/{id}/stream?offset=0`, `GET /api/job/{id}/output`
+- File uploads: `POST /api/upload`, `GET /api/uploads/{path}`, `POST /api/job/with-files`
+- Deploy: `./scripts/mac-mini.sh deploy` (builds Next.js app, rsyncs, restarts gateway)
 
 **When reading/writing tasks programmatically:**
 ```bash

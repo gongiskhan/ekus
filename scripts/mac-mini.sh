@@ -87,16 +87,30 @@ case "${1:-help}" in
 
     deploy)
         echo "Deploying ekus to Mac Mini..."
+        # Build Next.js app if ekus-app/ exists
+        if [ -d "/Users/ggomes/ekus/ekus-app" ]; then
+            echo "Building Next.js app..."
+            (cd /Users/ggomes/ekus/ekus-app && npm run build 2>&1 | tail -5)
+            echo "Copying static export to gateway..."
+            rm -rf /Users/ggomes/ekus/mac-mini/gateway/static
+            cp -r /Users/ggomes/ekus/ekus-app/out /Users/ggomes/ekus/mac-mini/gateway/static
+        fi
         rsync -avz --delete \
             --exclude 'node_modules' \
             --exclude '.DS_Store' \
             --exclude 'dashboard/node_modules' \
+            --exclude 'ekus-app/node_modules' \
+            --exclude 'ekus-app/.next' \
+            --exclude 'ekus-app/out' \
             --exclude 'faturas/' \
             --exclude '.env' \
             --exclude 'mac-mini/gateway/jobs/' \
             /Users/ggomes/ekus/ "${MAC_MINI_USER}@${MAC_MINI_HOST}:${REMOTE_EKUS_DIR}/" \
             | tail -5
-        echo "Deploy complete."
+        echo "Deploy complete. Restarting gateway..."
+        ssh_cmd "lsof -ti:${GATEWAY_PORT} | xargs kill -9 2>/dev/null || true; sleep 1; cd ${REMOTE_EKUS_DIR}/mac-mini/gateway && export PATH=/opt/homebrew/bin:\$PATH && nohup uv run python main.py > /tmp/ekus-gateway.log 2>&1 &"
+        sleep 2
+        echo "Gateway restarted."
         ;;
 
     send)

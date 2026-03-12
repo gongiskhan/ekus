@@ -1,0 +1,50 @@
+export interface Job {
+  id: string;
+  status: 'running' | 'completed' | 'failed' | 'stopped';
+  prompt: string;
+  full_prompt?: string;
+  created_at: string;
+  completed_at?: string;
+  duration_seconds?: number;
+  exit_code?: number;
+  pid?: number;
+  session?: string;
+  log_file?: string;
+  summary?: string;
+}
+
+export interface Task {
+  id: number;
+  title: string;
+  note: string;
+  checked: boolean;
+  subtasks: Subtask[];
+  section: string;
+}
+
+export interface Subtask {
+  text: string;
+  checked: boolean;
+}
+
+export interface TaskSection {
+  id: string;
+  name: string;
+}
+
+export interface SchedulerJob {
+  id: string;
+  description: string;
+  schedule: string;
+  prompt: string;
+  enabled: boolean;
+  last_run?: string;
+}
+
+export interface MemoryFile {
+  name: string;
+  size: number;
+  modified: string;
+}
+
+export type Tab = 'chat' | 'tasks' | 'scheduler' | 'memory';
