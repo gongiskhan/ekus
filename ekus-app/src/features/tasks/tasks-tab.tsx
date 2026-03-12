@@ -2,12 +2,11 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import useSWR from 'swr';
-import { motion } from 'framer-motion';
 import { api } from '@/lib/api';
 import type { Task, TaskSection } from '@/lib/types';
 import { parseTaskMarkdown, toMarkdown } from './task-utils';
 import { TaskCard } from './task-card';
-import { GlassCard } from '@/components/glass-card';
+import type { MoveAction } from './task-card';
 import { Modal } from '@/components/modal';
 import { useDebounce } from '@/hooks/use-debounce';
 
@@ -21,6 +20,7 @@ export function TasksTab() {
   const [addingTo, setAddingTo] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState('');
   const [newNote, setNewNote] = useState('');
+  const [dragOverSection, setDragOverSection] = useState<string | null>(null);
 
   const { data: rawContent, mutate } = useSWR<string>(
     'tasks',
@@ -51,17 +51,69 @@ export function TasksTab() {
     [saveToServer]
   );
 
+  const moveTask = useCallback(
+    (fromSection: string, taskId: number, toSection: string) => {
+      updateTasks((data) => {
+        const task = data.tasks[fromSection]?.find((t) => t.id === taskId);
+        if (!task) return data;
+        const movedTask = { ...task, section: toSection };
+        // Auto-check when moving to done, auto-uncheck when moving to active
+        if (toSection === 'done') movedTask.checked = true;
+        if (toSection === 'active') movedTask.checked = false;
+        return {
+          ...data,
+          tasks: {
+            ...data.tasks,
+            [fromSection]: data.tasks[fromSection].filter((t) => t.id !== taskId),
+            [toSection]: [...(data.tasks[toSection] || []), movedTask],
+          },
+        };
+      });
+    },
+    [updateTasks]
+  );
+
   const toggleTask = useCallback(
     (sectionId: string, taskId: number) => {
-      updateTasks((data) => ({
-        ...data,
-        tasks: {
-          ...data.tasks,
-          [sectionId]: data.tasks[sectionId].map((t) =>
-            t.id === taskId ? { ...t, checked: !t.checked } : t
-          ),
-        },
-      }));
+      updateTasks((data) => {
+        const task = data.tasks[sectionId]?.find((t) => t.id === taskId);
+        if (!task) return data;
+
+        // Checking a task in Active → move to Done
+        if (sectionId === 'active' && !task.checked && data.tasks['done']) {
+          return {
+            ...data,
+            tasks: {
+              ...data.tasks,
+              [sectionId]: data.tasks[sectionId].filter((t) => t.id !== taskId),
+              done: [...data.tasks['done'], { ...task, checked: true, section: 'done' }],
+            },
+          };
+        }
+
+        // Unchecking a task in Done → move to Active
+        if (sectionId === 'done' && task.checked && data.tasks['active']) {
+          return {
+            ...data,
+            tasks: {
+              ...data.tasks,
+              [sectionId]: data.tasks[sectionId].filter((t) => t.id !== taskId),
+              active: [...data.tasks['active'], { ...task, checked: false, section: 'active' }],
+            },
+          };
+        }
+
+        // Otherwise just toggle
+        return {
+          ...data,
+          tasks: {
+            ...data.tasks,
+            [sectionId]: data.tasks[sectionId].map((t) =>
+              t.id === taskId ? { ...t, checked: !t.checked } : t
+            ),
+          },
+        };
+      });
     },
     [updateTasks]
   );
@@ -84,24 +136,6 @@ export function TasksTab() {
           ),
         },
       }));
-    },
-    [updateTasks]
-  );
-
-  const moveTask = useCallback(
-    (fromSection: string, taskId: number, toSection: string) => {
-      updateTasks((data) => {
-        const task = data.tasks[fromSection]?.find((t) => t.id === taskId);
-        if (!task) return data;
-        return {
-          ...data,
-          tasks: {
-            ...data.tasks,
-            [fromSection]: data.tasks[fromSection].filter((t) => t.id !== taskId),
-            [toSection]: [...(data.tasks[toSection] || []), { ...task, section: toSection }],
-          },
-        };
-      });
     },
     [updateTasks]
   );
@@ -143,6 +177,52 @@ export function TasksTab() {
     setAddingTo(null);
   }, [addingTo, newTitle, newNote, updateTasks]);
 
+  const getActionsForTask = useCallback(
+    (sectionId: string, taskId: number): MoveAction[] => {
+      if (!taskData) return [];
+      const sectionIds = taskData.sections.map((s) => s.id);
+      const actions: MoveAction[] = [];
+
+      if (sectionId !== 'waiting-on' && sectionIds.includes('waiting-on')) {
+        actions.push({
+          label: 'Waiting On',
+          onClick: () => moveTask(sectionId, taskId, 'waiting-on'),
+        });
+      }
+      if (sectionId !== 'done' && sectionIds.includes('done')) {
+        actions.push({
+          label: 'Done',
+          onClick: () => moveTask(sectionId, taskId, 'done'),
+        });
+      }
+      if (sectionId !== 'active' && sectionIds.includes('active')) {
+        actions.push({
+          label: 'Active',
+          onClick: () => moveTask(sectionId, taskId, 'active'),
+        });
+      }
+
+      return actions;
+    },
+    [taskData, moveTask]
+  );
+
+  const handleDrop = useCallback(
+    (targetSection: string, e: React.DragEvent) => {
+      e.preventDefault();
+      setDragOverSection(null);
+      try {
+        const data = JSON.parse(e.dataTransfer.getData('application/json'));
+        if (data.fromSection && data.fromSection !== targetSection) {
+          moveTask(data.fromSection, data.taskId, targetSection);
+        }
+      } catch {
+        // ignore invalid drag data
+      }
+    },
+    [moveTask]
+  );
+
   if (!taskData) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -156,13 +236,27 @@ export function TasksTab() {
   return (
     <div className="h-full overflow-x-auto pb-32">
       <div className="flex gap-4 p-4 min-w-max">
-        {sections.map((section, sectionIndex) => {
+        {sections.map((section) => {
           const sectionTasks = tasks[section.id] || [];
-          const prevSection = sectionIndex > 0 ? sections[sectionIndex - 1] : null;
-          const nextSection = sectionIndex < sections.length - 1 ? sections[sectionIndex + 1] : null;
+          const isDragOver = dragOverSection === section.id;
 
           return (
-            <div key={section.id} className="w-72 flex-shrink-0">
+            <div
+              key={section.id}
+              className={`w-72 flex-shrink-0 rounded-xl p-2 transition-colors ${isDragOver ? 'bg-[var(--primary-light)]' : ''}`}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                setDragOverSection(section.id);
+              }}
+              onDragLeave={(e) => {
+                // Only clear if leaving the column (not entering a child)
+                if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                  setDragOverSection(null);
+                }
+              }}
+              onDrop={(e) => handleDrop(section.id, e)}
+            >
               <div className="flex items-center justify-between mb-3 px-1">
                 <h3 className="text-sm font-semibold" style={{ color: 'var(--text)' }}>
                   {section.name}
@@ -180,18 +274,10 @@ export function TasksTab() {
                   <TaskCard
                     key={task.id}
                     task={task}
+                    sectionId={section.id}
                     onToggle={() => toggleTask(section.id, task.id)}
                     onToggleSubtask={(_, si) => toggleSubtask(section.id, task.id, si)}
-                    onMoveLeft={
-                      prevSection
-                        ? () => moveTask(section.id, task.id, prevSection.id)
-                        : undefined
-                    }
-                    onMoveRight={
-                      nextSection
-                        ? () => moveTask(section.id, task.id, nextSection.id)
-                        : undefined
-                    }
+                    actions={getActionsForTask(section.id, task.id)}
                     onDelete={() => deleteTask(section.id, task.id)}
                   />
                 ))}
