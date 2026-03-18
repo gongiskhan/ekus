@@ -122,6 +122,92 @@ def _auto_rename_session(conversation_id: str, prompt: str):
 
 TERMINAL_SERVER_URL = os.environ.get("TERMINAL_SERVER_URL", "http://localhost:7601")
 
+# Max chars of conversation history to include (leave room for current prompt + response)
+MAX_HISTORY_CHARS = 80_000
+
+
+def _build_conversation_prompt(conversation_id: str, current_prompt: str) -> str:
+    """Build a prompt that includes conversation history from the session.
+
+    Collects previous prompts and outputs from completed jobs in the same session,
+    formats them as a conversation log, and prepends to the current prompt.
+    """
+    # Find all previous jobs in this session, sorted by created_at
+    prev_jobs = []
+    for f in JOBS_DIR.glob("*.yaml"):
+        with open(f) as fh:
+            data = yaml.safe_load(fh)
+        if not data:
+            continue
+        if data.get("conversation_id") != conversation_id:
+            continue
+        # Only include completed jobs (not the one we're about to create)
+        if data.get("status") not in ("completed", "failed"):
+            continue
+        prev_jobs.append(data)
+
+    if not prev_jobs:
+        return current_prompt
+
+    # Sort by created_at ascending
+    prev_jobs.sort(key=lambda j: j.get("created_at", ""))
+
+    # Build conversation history
+    turns = []
+    total_chars = 0
+    for job in prev_jobs:
+        prompt = job.get("full_prompt") or job.get("prompt", "")
+        # Read output from log file
+        log_file = JOBS_DIR / f"{job['id']}.log"
+        output = ""
+        if log_file.exists():
+            try:
+                output = log_file.read_text(errors='replace').strip()
+            except OSError:
+                pass
+
+        turn_text = f"User: {prompt}\n\nAssistant: {output}"
+        turn_len = len(turn_text)
+
+        # Check if adding this turn would exceed the limit
+        if total_chars + turn_len > MAX_HISTORY_CHARS:
+            # Truncate from the beginning (keep most recent turns)
+            break
+        turns.append(turn_text)
+        total_chars += turn_len
+
+    if not turns:
+        return current_prompt
+
+    # If we had to skip early turns due to size, only keep the latest ones
+    # Re-collect from the end to prioritize recent context
+    if len(turns) < len(prev_jobs):
+        turns = []
+        total_chars = 0
+        for job in reversed(prev_jobs):
+            prompt = job.get("full_prompt") or job.get("prompt", "")
+            log_file = JOBS_DIR / f"{job['id']}.log"
+            output = ""
+            if log_file.exists():
+                try:
+                    output = log_file.read_text(errors='replace').strip()
+                except OSError:
+                    pass
+            turn_text = f"User: {prompt}\n\nAssistant: {output}"
+            if total_chars + len(turn_text) > MAX_HISTORY_CHARS:
+                break
+            turns.insert(0, turn_text)
+            total_chars += len(turn_text)
+
+    history = "\n\n---\n\n".join(turns)
+    return f"""<conversation_history>
+The following is the conversation so far in this session. Continue naturally from where we left off.
+
+{history}
+</conversation_history>
+
+User: {current_prompt}"""
+
 
 def _try_terminal_server(job_id: str, prompt: str) -> bool:
     """Try to start a job via the terminal server (node-pty). Returns True on success."""
@@ -194,9 +280,14 @@ def create_job(req: JobRequest):
     with open(job_file, "w") as f:
         yaml.dump(job_data, f, default_flow_style=False, sort_keys=False)
 
+    # Build prompt with conversation history if in a session
+    full_prompt = req.prompt
+    if req.conversation_id:
+        full_prompt = _build_conversation_prompt(req.conversation_id, req.prompt)
+
     # Try terminal server first (real-time streaming via WebSocket)
     # Falls back to worker.py (tmux + polling) if terminal server is down
-    if not _try_terminal_server(job_id, req.prompt):
+    if not _try_terminal_server(job_id, full_prompt):
         _start_worker_fallback(job_id, job_file)
 
     result = {"job_id": job_id, "status": "running"}
