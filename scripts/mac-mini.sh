@@ -18,28 +18,37 @@ set -euo pipefail
 MAC_MINI_HOST="${MAC_MINI_HOST:-100.90.155.85}"
 MAC_MINI_USER="${MAC_MINI_USER:-ggomes}"
 GATEWAY_PORT="${GATEWAY_PORT:-7600}"
+TERMINAL_PORT="${TERMINAL_PORT:-7601}"
 GATEWAY_URL="http://${MAC_MINI_HOST}:${GATEWAY_PORT}"
+TERMINAL_URL="http://${MAC_MINI_HOST}:${TERMINAL_PORT}"
 REMOTE_EKUS_DIR="/Users/${MAC_MINI_USER}/Projects/ekus"
 
 ssh_cmd() {
-    ssh -o ConnectTimeout=5 -o ServerAliveInterval=15 "${MAC_MINI_USER}@${MAC_MINI_HOST}" "$@"
+    ssh -o ConnectTimeout=5 -o ServerAliveInterval=15 -o IdentityFile=~/.ssh/id_ed25519 -o IdentitiesOnly=yes "${MAC_MINI_USER}@${MAC_MINI_HOST}" "$@"
 }
 
 case "${1:-help}" in
     status)
-        echo "Checking Mac Mini gateway at ${GATEWAY_URL}..."
+        echo "Checking Mac Mini services..."
+        echo ""
+        echo "Gateway (${GATEWAY_URL}):"
         if curl -s --max-time 5 "${GATEWAY_URL}/health" 2>/dev/null; then
             echo ""
-            echo "Gateway is running."
-            echo ""
-            echo "Jobs:"
-            curl -s "${GATEWAY_URL}/jobs"
         else
-            echo "Gateway is NOT running."
+            echo "  NOT running."
+        fi
+        echo ""
+        echo "Terminal (${TERMINAL_URL}):"
+        if curl -s --max-time 5 "${TERMINAL_URL}/health" 2>/dev/null; then
             echo ""
+        else
+            echo "  NOT running."
+        fi
+        echo ""
+        if ! curl -s --max-time 5 "${GATEWAY_URL}/health" >/dev/null 2>&1; then
             echo "Checking SSH connectivity..."
             if ssh_cmd "echo SSH_OK" 2>/dev/null; then
-                echo "SSH works. Start the gateway with: ./scripts/mac-mini.sh start"
+                echo "SSH works. Start services with: ./scripts/mac-mini.sh start"
             else
                 echo "SSH failed. Is the Mac Mini online?"
             fi
@@ -47,27 +56,50 @@ case "${1:-help}" in
         ;;
 
     start)
-        echo "Starting gateway on Mac Mini..."
+        echo "Starting services on Mac Mini..."
         ssh_cmd "
             export PATH=/opt/homebrew/bin:\$PATH
-            # Kill any existing gateway
+
+            # Kill any existing processes
             lsof -ti:${GATEWAY_PORT} | xargs kill -9 2>/dev/null || true
+            lsof -ti:${TERMINAL_PORT} | xargs kill -9 2>/dev/null || true
             sleep 1
+
+            # Install terminal server deps if needed
+            cd ${REMOTE_EKUS_DIR}/mac-mini/terminal
+            if [ ! -d node_modules ]; then
+                echo 'Installing terminal server dependencies...'
+                npm install 2>&1 | tail -3
+            fi
+
+            # Start terminal server
+            nohup node server.js > /tmp/ekus-terminal.log 2>&1 &
+            echo \"Terminal PID: \$!\"
+
             # Start gateway
             cd ${REMOTE_EKUS_DIR}/mac-mini/gateway
             nohup uv run python main.py > /tmp/ekus-gateway.log 2>&1 &
             echo \"Gateway PID: \$!\"
+
             sleep 2
-            curl -s http://localhost:${GATEWAY_PORT}/health
+            echo 'Gateway:'
+            curl -s http://localhost:${GATEWAY_PORT}/health 2>/dev/null || echo 'NOT RUNNING'
+            echo ''
+            echo 'Terminal:'
+            curl -s http://localhost:${TERMINAL_PORT}/health 2>/dev/null || echo 'NOT RUNNING'
         "
         echo ""
-        echo "Gateway started at ${GATEWAY_URL}"
+        echo "Gateway: ${GATEWAY_URL}"
+        echo "Terminal: ${TERMINAL_URL}"
         ;;
 
     stop)
-        echo "Stopping gateway on Mac Mini..."
-        ssh_cmd "lsof -ti:${GATEWAY_PORT} | xargs kill -9 2>/dev/null || true"
-        echo "Gateway stopped."
+        echo "Stopping services on Mac Mini..."
+        ssh_cmd "
+            lsof -ti:${GATEWAY_PORT} | xargs kill -9 2>/dev/null || true
+            lsof -ti:${TERMINAL_PORT} | xargs kill -9 2>/dev/null || true
+        "
+        echo "Services stopped."
         ;;
 
     restart)
@@ -87,15 +119,17 @@ case "${1:-help}" in
 
     deploy)
         echo "Deploying ekus to Mac Mini..."
+        EKUS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
         # Build Next.js app if ekus-app/ exists
-        if [ -d "/Users/ggomes/ekus/ekus-app" ]; then
+        if [ -d "${EKUS_DIR}/ekus-app" ]; then
             echo "Building Next.js app..."
-            (cd /Users/ggomes/ekus/ekus-app && npm run build 2>&1 | tail -5)
+            (cd "${EKUS_DIR}/ekus-app" && npm run build 2>&1 | tail -5)
             echo "Copying static export to gateway..."
-            rm -rf /Users/ggomes/ekus/mac-mini/gateway/static
-            cp -r /Users/ggomes/ekus/ekus-app/out /Users/ggomes/ekus/mac-mini/gateway/static
+            rm -rf "${EKUS_DIR}/mac-mini/gateway/static"
+            cp -r "${EKUS_DIR}/ekus-app/out" "${EKUS_DIR}/mac-mini/gateway/static"
         fi
         rsync -avzL --delete \
+            -e "ssh -o IdentityFile=~/.ssh/id_ed25519 -o IdentitiesOnly=yes" \
             --exclude 'node_modules' \
             --exclude '.DS_Store' \
             --exclude 'dashboard/node_modules' \
@@ -104,13 +138,32 @@ case "${1:-help}" in
             --exclude 'ekus-app/out' \
             --exclude 'faturas/' \
             --exclude '.env' \
+            --exclude 'obsidian-vault/' \
             --exclude 'mac-mini/gateway/jobs/' \
-            /Users/ggomes/ekus/ "${MAC_MINI_USER}@${MAC_MINI_HOST}:${REMOTE_EKUS_DIR}/" \
+            --exclude 'mac-mini/terminal/node_modules' \
+            "${EKUS_DIR}/" "${MAC_MINI_USER}@${MAC_MINI_HOST}:${REMOTE_EKUS_DIR}/" \
             | tail -5
-        echo "Deploy complete. Restarting gateway..."
-        ssh_cmd "lsof -ti:${GATEWAY_PORT} | xargs kill -9 2>/dev/null || true; sleep 1; cd ${REMOTE_EKUS_DIR}/mac-mini/gateway && export PATH=/opt/homebrew/bin:\$PATH && nohup uv run python main.py > /tmp/ekus-gateway.log 2>&1 &"
+        echo "Deploy complete. Restarting services..."
+        ssh_cmd "
+            export PATH=/opt/homebrew/bin:\$PATH
+
+            # Stop existing services
+            lsof -ti:${GATEWAY_PORT} | xargs kill -9 2>/dev/null || true
+            lsof -ti:${TERMINAL_PORT} | xargs kill -9 2>/dev/null || true
+            sleep 1
+
+            # Install terminal server deps
+            cd ${REMOTE_EKUS_DIR}/mac-mini/terminal && npm install --production 2>&1 | tail -3
+
+            # Start terminal server
+            nohup node server.js > /tmp/ekus-terminal.log 2>&1 &
+
+            # Start gateway
+            cd ${REMOTE_EKUS_DIR}/mac-mini/gateway
+            nohup uv run python main.py > /tmp/ekus-gateway.log 2>&1 &
+        "
         sleep 2
-        echo "Gateway restarted."
+        echo "Services restarted."
         ;;
 
     send)

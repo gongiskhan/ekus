@@ -10,12 +10,15 @@ interface ChatMessageProps {
   job: Job;
   streamOutput?: string;
   isStreaming?: boolean;
+  onStreamDone?: () => void;
 }
 
 export function ChatMessage({ job, streamOutput, isStreaming }: ChatMessageProps) {
   const [expanded, setExpanded] = useState(false);
 
+  const isRunning = job.status === 'running';
   const output = streamOutput ?? job.summary ?? '';
+
   const isLong = output.length > 500;
   const displayOutput = isLong && !expanded && !isStreaming ? output.slice(0, 500) + '...' : output;
 
@@ -53,16 +56,16 @@ export function ChatMessage({ job, streamOutput, isStreaming }: ChatMessageProps
       </div>
 
       {/* Assistant response */}
-      {(output || isStreaming) && (
+      {(output || isStreaming || isRunning) && (
         <div className="flex justify-start">
           <div
-            className="max-w-[85%] glass rounded-2xl rounded-bl-md px-4 py-3 cursor-pointer"
+            className={`max-w-[85%] glass rounded-2xl rounded-bl-md px-4 py-3 ${isLong ? 'cursor-pointer' : ''}`}
             onClick={() => isLong && setExpanded(!expanded)}
           >
             <div className="flex items-center gap-2 mb-1.5">
               <StatusBadge
                 variant={
-                  isStreaming
+                  isStreaming || isRunning
                     ? 'running'
                     : job.status === 'completed'
                     ? 'completed'
@@ -82,7 +85,15 @@ export function ChatMessage({ job, streamOutput, isStreaming }: ChatMessageProps
                 </span>
               )}
             </div>
-            <MarkdownRenderer content={displayOutput} />
+
+            {output ? (
+              <MarkdownRenderer content={displayOutput} />
+            ) : isRunning ? (
+              <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                Thinking...
+              </span>
+            ) : null}
+
             {isLong && !isStreaming && (
               <button
                 className="text-xs font-medium mt-1"

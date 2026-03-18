@@ -14,7 +14,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/ggomes/ekus/.claude/hooks/auto-learn-prompt.sh"
+            "command": "/Users/ggomes/Projects/ekus/.claude/hooks/auto-learn-prompt.sh"
           }
         ]
       }
@@ -25,7 +25,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/ggomes/ekus/.claude/hooks/auto-learn-stop.sh"
+            "command": "/Users/ggomes/Projects/ekus/.claude/hooks/auto-learn-stop.sh"
           }
         ]
       }

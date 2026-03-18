@@ -3,52 +3,68 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import useSWR from 'swr';
 import { api } from '@/lib/api';
+import { useAppStore } from '@/lib/store';
 import type { Job } from '@/lib/types';
 import { ChatMessage } from './chat-message';
 import { ChatInput } from './chat-input';
 import { useJobStream } from './use-job-stream';
+import { SessionSidebar } from './session-sidebar';
 
 export function ChatTab() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const [activeStreamId, setActiveStreamId] = useState<string | null>(null);
   const [outputs, setOutputs] = useState<Record<string, string>>({});
+  // Optimistic job: shown immediately while SWR hasn't refreshed yet
+  const [pendingJob, setPendingJob] = useState<Job | null>(null);
+
+  const activeSessionId = useAppStore((s) => s.activeSessionId);
+  const setActiveSessionId = useAppStore((s) => s.setActiveSessionId);
+  const sidebarOpen = useAppStore((s) => s.sidebarOpen);
+  const setSidebarOpen = useAppStore((s) => s.setSidebarOpen);
 
   const { data: jobs, mutate } = useSWR<Job[]>(
-    'jobs',
-    () => api.listJobs().then((data: { jobs?: Job[] }) => {
+    `jobs-${activeSessionId ?? 'all'}`,
+    () => api.listJobs(activeSessionId).then((data: { jobs?: Job[] }) => {
       const list = data.jobs || data;
       return Array.isArray(list) ? list : [];
     }),
     {
       refreshInterval: (data) => {
         const arr = data || [];
-        return arr.some((j: Job) => j.status === 'running') ? 3000 : 30000;
+        return arr.some((j: Job) => j.status === 'running') || pendingJob ? 3000 : 30000;
       },
       fallbackData: [],
     }
   );
 
-  // Find the currently running job
-  const runningJob = (jobs || []).find((j) => j.status === 'running');
-
+  // Clear pending job once SWR picks it up
   useEffect(() => {
-    if (runningJob) {
-      setActiveStreamId(runningJob.id);
-    } else {
+    if (pendingJob && (jobs || []).some((j) => j.id === pendingJob.id)) {
+      setPendingJob(null);
+    }
+  }, [jobs, pendingJob]);
+
+  const stream = useJobStream(activeStreamId, activeStreamId ? 'running' : undefined);
+
+  // Store streaming output keyed by job ID — use stream.jobId (not activeStreamId)
+  // to avoid race condition where activeStreamId changes before stream.output resets
+  useEffect(() => {
+    if (stream.jobId && stream.output) {
+      setOutputs((prev) => ({ ...prev, [stream.jobId!]: stream.output }));
+    }
+  }, [stream.jobId, stream.output]);
+
+  // Clear activeStreamId when stream completes
+  useEffect(() => {
+    if (stream.status === 'completed' || stream.status === 'failed') {
       setActiveStreamId(null);
+      // Force SWR refresh to get final job status
+      mutate();
     }
-  }, [runningJob]);
+  }, [stream.status, mutate]);
 
-  const stream = useJobStream(activeStreamId, runningJob?.status);
-
-  useEffect(() => {
-    if (activeStreamId && stream.output) {
-      setOutputs((prev) => ({ ...prev, [activeStreamId]: stream.output }));
-    }
-  }, [activeStreamId, stream.output]);
-
-  // Fetch summaries for completed jobs that don't have one yet
+  // Fetch outputs for completed jobs that don't have one yet
   useEffect(() => {
     (jobs || []).forEach((job) => {
       if (job.status !== 'running' && !outputs[job.id] && !job.summary) {
@@ -78,14 +94,31 @@ export function ChatTab() {
   const handleSend = useCallback(
     async (prompt: string, files: File[]) => {
       try {
+        let sessionId = activeSessionId;
+
+        if (!sessionId || sessionId === '__history__') {
+          const session = await api.createSession();
+          sessionId = session.id;
+          setActiveSessionId(sessionId);
+        }
+
         let result;
         if (files.length > 0) {
-          result = await api.createJobWithFiles(prompt, files);
+          result = await api.createJobWithFiles(prompt, files, sessionId);
         } else {
-          result = await api.createJob(prompt);
+          result = await api.createJob(prompt, sessionId);
         }
-        if (result.id) {
-          setActiveStreamId(result.id);
+        const id = result.job_id || result.id;
+        if (id) {
+          // Add optimistic job so it appears immediately
+          setPendingJob({
+            id,
+            prompt,
+            status: 'running',
+            created_at: new Date().toISOString(),
+            session: sessionId || '',
+          });
+          setActiveStreamId(id);
           setAutoScroll(true);
         }
         mutate();
@@ -93,15 +126,21 @@ export function ChatTab() {
         console.error('Failed to create job:', err);
       }
     },
-    [mutate]
+    [mutate, activeSessionId, setActiveSessionId]
   );
 
-  const sortedJobs = [...(jobs || [])].sort(
+  // Merge SWR jobs + pending optimistic job, sorted by created_at
+  const allJobs = [...(jobs || [])];
+  if (pendingJob && !allJobs.some((j) => j.id === pendingJob.id)) {
+    allJobs.push(pendingJob);
+  }
+  const sortedJobs = allJobs.sort(
     (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
   );
 
   return (
     <div className="flex flex-col h-full">
+      <SessionSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div
         ref={scrollRef}
         onScroll={handleScroll}

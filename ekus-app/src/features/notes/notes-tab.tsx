@@ -22,7 +22,7 @@ function saveNotes(notes: Note[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
 }
 
-const memoryFiles = ['lessons-learned.md', 'workflows.md', 'reminders.md'];
+const defaultMemoryFiles = ['lessons-learned.md', 'workflows.md', 'reminders.md'];
 
 export function NotesTab() {
   const [notes, setNotes] = useState<Note[]>([]);
@@ -31,11 +31,19 @@ export function NotesTab() {
   const [editContent, setEditContent] = useState('');
   const [actionMenu, setActionMenu] = useState<string | null>(null);
   const [memoryPicker, setMemoryPicker] = useState<string | null>(null);
+  const [memoryFiles, setMemoryFiles] = useState<string[]>(defaultMemoryFiles);
   const [toast, setToast] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     setNotes(loadNotes());
+    // Fetch memory file list dynamically
+    api.listMemory().then((dict) => {
+      if (dict && typeof dict === 'object') {
+        const names = Object.keys(dict);
+        setMemoryFiles([...new Set([...defaultMemoryFiles, ...names])]);
+      }
+    }).catch(() => {});
   }, []);
 
   const persist = (updated: Note[]) => {

@@ -2,18 +2,22 @@ const getBase = () => typeof window !== 'undefined' ? window.location.origin : '
 
 export const api = {
   // Jobs
-  listJobs: () => fetch(`${getBase()}/api/jobs`).then(r => r.json()),
+  listJobs: (conversationId?: string | null) => {
+    const params = conversationId ? `?conversation_id=${conversationId}` : '';
+    return fetch(`${getBase()}/api/jobs${params}`).then(r => r.json());
+  },
   getJob: (id: string) => fetch(`${getBase()}/api/job/${id}`).then(r => r.json()),
   getJobOutput: (id: string) => fetch(`${getBase()}/api/job/${id}/output`).then(r => r.text()),
-  createJob: (prompt: string) =>
+  createJob: (prompt: string, conversationId?: string | null) =>
     fetch(`${getBase()}/job`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify({ prompt, conversation_id: conversationId || undefined }),
     }).then(r => r.json()),
-  createJobWithFiles: (prompt: string, files: File[]) => {
+  createJobWithFiles: (prompt: string, files: File[], conversationId?: string | null) => {
     const form = new FormData();
     form.append('prompt', prompt);
+    if (conversationId) form.append('conversation_id', conversationId);
     files.forEach(f => form.append('files', f));
     return fetch(`${getBase()}/api/job/with-files`, { method: 'POST', body: form }).then(r => r.json());
   },
@@ -23,6 +27,23 @@ export const api = {
   streamJob: (id: string, offset = 0) => {
     return new EventSource(`${getBase()}/api/job/${id}/stream?offset=${offset}`);
   },
+
+  // Sessions
+  listSessions: () => fetch(`${getBase()}/api/sessions`).then(r => r.json()),
+  createSession: (name?: string) =>
+    fetch(`${getBase()}/api/sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    }).then(r => r.json()),
+  renameSession: (id: string, name: string) =>
+    fetch(`${getBase()}/api/sessions/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    }).then(r => r.json()),
+  deleteSession: (id: string) =>
+    fetch(`${getBase()}/api/sessions/${id}`, { method: 'DELETE' }).then(r => r.json()),
 
   // Tasks
   getTasks: () => fetch(`${getBase()}/api/tasks`).then(r => r.text()),

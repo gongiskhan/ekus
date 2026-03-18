@@ -177,42 +177,54 @@ See `.claude/skills/mac-mini/SKILL.md` for full API reference.
 
 ## Knowledge Base (Obsidian)
 
-All memory/knowledge files live in the **Obsidian vault** at `~/Documents/obsidian-vault/Ekus/Memory/`.
-Local `memory/` directory has symlinks pointing there. Edit in Obsidian for the best experience.
+The Obsidian vault at `obsidian-vault/` (inside the project) is the **single source of truth** for all Ekus knowledge. Local `memory/` directory has symlinks pointing to the vault. The vault has its own git repo — do NOT track it with the ekus repo.
 
 Before starting any task involving a skill or domain already in the knowledge base:
 1. Read `memory/lessons-learned.md` — scan for relevant entries
 2. Read `memory/workflows.md` — check if a proven process exists
 
-Quick reference:
-- `memory/lessons-learned.md` — Hard-won knowledge, mistakes to avoid
-- `memory/workflows.md` — Step-by-step processes for common tasks
-- `memory/reminders.md` — Pending reminders
+### Vault Structure
 
-Obsidian vault structure:
 ```
-~/Documents/obsidian-vault/
-├── Projects/
+obsidian-vault/
 ├── Ekus/
-│   ├── Ekus.md          — Index note
-│   ├── tasks.md         — Task list (read-only copy, source of truth on Mac Mini)
-│   └── Memory/
-│       ├── lessons-learned.md  ← symlinked from ekus/memory/
-│       ├── workflows.md        ← symlinked from ekus/memory/
-│       └── reminders.md        ← symlinked from ekus/memory/
+│   ├── Ekus.md              — Index note (wikilinks to all areas)
+│   ├── tasks.md             — Task list (read-only copy, source of truth on Mac Mini)
+│   ├── Memory/              — Canonical memory store (symlinked from memory/)
+│   │   ├── lessons-learned.md  — Hard-won knowledge, gotchas, debugging tips
+│   │   ├── workflows.md        — Proven step-by-step processes
+│   │   └── reminders.md        — Pending reminders
+│   ├── Automations/         — Browser automations, integrations, cron jobs
+│   │   └── Automations.md   — Index note
+│   └── Knowledge/           — Tools, APIs, reference material
+│       └── Knowledge.md     — Index note
+├── Projects/
+│   └── Ekoa/                — Ekoa project docs
+├── Ideas/                   — Plans, ideas, future projects
+├── People/                  — Contact notes, preferences
+└── Daily/                   — Daily notes
 ```
+
+### How to Read/Write Vault Content
+
+1. **Direct file ops** (fastest) — read/write via `memory/` symlinks or `obsidian-vault/` paths
+2. **obsidian-cli** — `obsidian-cli print "lessons-learned"`, `obsidian-cli search-content "browser"`
+3. **Gateway API** — `GET/PUT /api/memory/{filename}` (dynamically discovers all .md files in `memory/`)
 
 ## Memory & Auto-Learning
 
-### Memory Files
+### Memory Stores
 
-You have three memory stores. Know which to use:
+Ekus has 6 knowledge stores. Know which to use:
 
-| File | Purpose | What goes here | Max size |
-|------|---------|---------------|----------|
-| `~/.claude/projects/-Users-ggomes-Projects-ekus/memory/MEMORY.md` | Auto-loaded context | Key facts, preferences, vault paths | 200 lines |
-| `memory/lessons-learned.md` (Obsidian) | Knowledge base | Gotchas, debugging tips, tool quirks, failures | No cap |
-| `memory/workflows.md` (Obsidian) | Process library | Repeatable step-by-step procedures (3+ steps) | No cap |
+| Store | Location | What goes here |
+|-------|----------|---------------|
+| **MEMORY.md** | `~/.claude/projects/.../memory/MEMORY.md` | Auto-loaded context: vault pointers, key navigation, deploy essentials (200 lines max) |
+| **Lessons Learned** | `memory/lessons-learned.md` | Gotchas, debugging tips, tool quirks, failures, solutions that took >5 min |
+| **Workflows** | `memory/workflows.md` | Repeatable step-by-step procedures (3+ steps) |
+| **Automations** | `obsidian-vault/Ekus/Automations/` | Automation docs: description, trigger/schedule, code location, dependencies, quirks |
+| **Knowledge** | `obsidian-vault/Ekus/Knowledge/` | Tools, APIs, architecture decisions, integration details (endpoints, auth, rate limits) |
+| **Project Docs** | `obsidian-vault/Projects/` | Per-project architecture, deployment, and reference docs |
 
 ### Post-Task: Auto-Learning (MANDATORY)
 
@@ -223,6 +235,9 @@ After completing any non-trivial task, perform this reflection **before giving y
 - Did something fail or behave unexpectedly?
 - Did I follow a multi-step process that could be reused?
 - Did I learn a new fact about the user's setup, accounts, or preferences?
+- Did I build or modify an automation?
+- Did I learn something about a tool, API, or integration that isn't documented?
+- Did I make an architecture or design decision worth recording?
 
 If ALL answers are "no," skip. Most simple tasks produce nothing — that is fine.
 
@@ -230,6 +245,9 @@ If ALL answers are "no," skip. Most simple tasks produce nothing — that is fin
 - **New fact** (account, preference, endpoint) → `MEMORY.md`
 - **Gotcha / tip / tool quirk / failure** → `memory/lessons-learned.md`
 - **Repeatable process (3+ steps)** → `memory/workflows.md`
+- **Automation built or modified** → `obsidian-vault/Ekus/Automations/{name}.md`
+- **Tool/API/architecture reference** → `obsidian-vault/Ekus/Knowledge/{topic}.md`
+- **Project-specific** → `obsidian-vault/Projects/{project}/`
 
 **3. Check for duplicates.** Read the target file first. If a similar entry exists, update it instead of adding a new one.
 
@@ -237,9 +255,30 @@ If ALL answers are "no," skip. Most simple tasks produce nothing — that is fin
 - `lessons-learned.md` — `### Heading` under appropriate `## Category`
 - `workflows.md` — `## Workflow Name` with numbered steps
 - `MEMORY.md` — `## Section` with bullet points, keep under 200 lines
+- Vault notes — use [[wikilinks]] and YAML frontmatter (Obsidian Flavored Markdown)
 
 **5. Notify.** Add a brief note at the end of your response:
 > 📝 Saved to memory: [one-line summary]
+
+### Cross-Project Learning
+
+When working on **any** project (not just ekus tasks), save learnings to the vault:
+- Tool/API quirks discovered → `lessons-learned.md`
+- Multi-step processes → `workflows.md`
+- Project architecture decisions → `obsidian-vault/Projects/{project}/`
+- Integration details (endpoints, auth, rate limits) → `Ekus/Knowledge/`
+- User work patterns and preferences → `MEMORY.md`
+
+### Automations Documentation
+
+When any automation is built or modified, document it in `obsidian-vault/Ekus/Automations/`:
+- **What** it does (description)
+- **When** it runs (trigger/schedule)
+- **Where** the code lives (file paths)
+- **Dependencies** (APIs, credentials, tools)
+- **Known quirks** (gotchas, failure modes)
+
+Update existing automation docs when behavior changes.
 
 ### What NOT to Save
 - Trivial facts, anything already in the files, temporary state, secrets/tokens

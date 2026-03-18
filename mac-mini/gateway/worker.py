@@ -1,10 +1,8 @@
-"""Job worker — runs a Claude Code agent in a headless tmux session.
+"""Job worker — runs a Claude Code agent in a visible tmux session.
 
-Creates a detached tmux session, sends the claude command with sentinel
-markers, polls for completion, writes incremental output to a log file,
-then updates the job YAML.
-
-Adapted from mac-mini-agent for headless operation (no Terminal.app needed).
+Opens a Terminal.app window with a tmux session, sends the claude command
+with sentinel markers, polls for completion, writes incremental output to
+a log file, then updates the job YAML.
 """
 
 import os
@@ -36,8 +34,13 @@ def _session_exists(name: str) -> bool:
 
 
 def _create_session(name: str, cwd: str) -> None:
-    """Create a detached tmux session (headless, no Terminal.app)."""
-    _tmux("new-session", "-d", "-s", name, "-c", cwd)
+    """Create a tmux session in a visible Terminal.app window (headed)."""
+    tmux_cmd = f"tmux new-session -A -s {name} -c '{cwd}'"
+    escaped = tmux_cmd.replace("\\", "\\\\").replace('"', '\\"')
+    subprocess.run(
+        ["osascript", "-e", f'tell application "Terminal" to do script "{escaped}"'],
+        capture_output=True, text=True,
+    )
     deadline = time.monotonic() + 5.0
     while time.monotonic() < deadline:
         if _session_exists(name):
@@ -146,7 +149,7 @@ def main():
     start_time = time.time()
 
     try:
-        # Create headless tmux session
+        # Create visible tmux session in Terminal.app
         _create_session(session_name, working_dir)
 
         # Increase scrollback buffer for full capture

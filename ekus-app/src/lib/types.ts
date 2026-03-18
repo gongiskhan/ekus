@@ -11,6 +11,17 @@ export interface Job {
   session?: string;
   log_file?: string;
   summary?: string;
+  conversation_id?: string;
+}
+
+export interface ChatSession {
+  id: string;
+  name: string;
+  created_at: string;
+  updated_at?: string;
+  job_count?: number;
+  has_running?: boolean;
+  last_prompt?: string;
 }
 
 export interface Task {

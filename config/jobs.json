@@ -18,7 +18,7 @@
       "id": "hourly-digest",
       "description": "Hourly task digest via Slack #tudo (weekdays 6am-11pm)",
       "schedule": "0 6-23 * * 1-5",
-      "prompt": "You are Ekus running the hourly digest. Working directory: ~/ekus\n\nSTEP 0: Sync Trello <-> Dashboard tasks\nsource .env\nFetch Trello 'A Fazer' cards: curl -s \"https://api.trello.com/1/lists/692ef0efcda3c6ad22f446b0/cards?key=$TRELLO_KEY&token=$TRELLO_TOKEN&fields=name,id\"\nFetch Trello 'Brevemente' cards: curl -s \"https://api.trello.com/1/lists/5a38df428080f0d513df0672/cards?key=$TRELLO_KEY&token=$TRELLO_TOKEN&fields=name,id\"\nFetch Dashboard tasks: curl -s \"http://localhost:7600/api/tasks\"\nParse the dashboard markdown: ## Active = A Fazer, ## Waiting On = Brevemente.\nCompare both sides using fuzzy title matching (case-insensitive, ignore punctuation/accents, match partial titles).\nFor each Trello A Fazer card NOT in Dashboard Active, add it as: - [ ] **Card Name**\nFor each Trello Brevemente card NOT in Dashboard Waiting On, add it as: - [ ] **Card Name**\nFor each Dashboard Active task NOT in Trello A Fazer, create a Trello card: curl -s -X POST \"https://api.trello.com/1/cards?key=$TRELLO_KEY&token=$TRELLO_TOKEN\" -d \"idList=692ef0efcda3c6ad22f446b0\" --data-urlencode \"name=<task title>\"\nFor each Dashboard Waiting On task NOT in Trello Brevemente, create a Trello card: curl -s -X POST \"https://api.trello.com/1/cards?key=$TRELLO_KEY&token=$TRELLO_TOKEN\" -d \"idList=5a38df428080f0d513df0672\" --data-urlencode \"name=<task title>\"\nNote: CSG: i18n and CSG: validacoes are in Dashboard Active but Trello Brevemente — this is intentional (different priority views), do NOT move or duplicate them.\nIf dashboard was updated, PUT the new markdown to the API.\nSkip items in ## Done.\n\nSTEP 1: Fetch tasks from local API\nRun: curl -s \"http://localhost:7600/api/tasks\"\nParse the markdown: ## Active = current tasks, ## Waiting On = brevemente items.\nEach task line: - [ ] **Title** - description\n\nSTEP 2: Fetch calendar events\nRun: curl -s \"https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=$(date -u +%Y-%m-%dT00:00:00Z)&timeMax=$(date -u +%Y-%m-%dT23:59:59Z)&singleEvents=true&orderBy=startTime&key=$GOOGLE_API_KEY\" (source .env first)\nIf calendar API fails or no GOOGLE_API_KEY, skip calendar section and note 'Calendario indisponivel'.\nAlso try tomorrow's events with tomorrow's date.\n\nSTEP 3: Format the digest as Slack mrkdwn\nFormat example:\n:lizard: _Task List -- Qui 05/03, 09:00_\n\n:alarm_clock: *Agenda de Hoje*\n- List today's events with times. ~strikethrough~ past events. Mark current/next with <- _agora_ / _proximo_\n\n:wrench: *Dev (por prioridade)*\n1. dev-related Active tasks\n\n:clipboard: *Outras*\n- Non-dev Active tasks\n\n:date: *Brevemente*\n- Waiting On tasks\n\n:calendar: *Amanha*\n- Tomorrow's events (only if any)\n\nUse Portuguese day names: Seg, Ter, Qua, Qui, Sex.\n\nAt the very end of the message, add a link to the dashboard:\n<http://100.90.155.85:7600|:kanban: Ekus App>\n\nSTEP 4: Send via Slack Webhook\nsource .env\nBuild the JSON payload with the formatted message. Use python3 to properly escape the message for JSON.\nExample:\npython3 -c \"\nimport json, subprocess\nmsg = '''<your formatted message>'''\npayload = json.dumps({'text': msg})\nsubprocess.run(['curl', '-s', '-X', 'POST', '$SLACK_WEBHOOK_URL', '-H', 'Content-type: application/json', '--data-raw', payload])\n\"\nThe webhook URL is in $SLACK_WEBHOOK_URL env var.\n\nKeep concise. Bullet points, no prose. Do NOT save to memory files.",
+      "prompt": "You are Ekus running the hourly digest. Working directory: ~/ekus\n\nSTEP 0: Sync Trello <-> Dashboard tasks\nsource .env\nFetch Trello 'A Fazer' cards: curl -s \"https://api.trello.com/1/lists/692ef0efcda3c6ad22f446b0/cards?key=$TRELLO_KEY&token=$TRELLO_TOKEN&fields=name,id\"\nFetch Trello 'Brevemente' cards: curl -s \"https://api.trello.com/1/lists/5a38df428080f0d513df0672/cards?key=$TRELLO_KEY&token=$TRELLO_TOKEN&fields=name,id\"\nFetch Dashboard tasks: curl -s \"http://localhost:7600/api/tasks\"\nParse the dashboard markdown: ## Active = A Fazer, ## Waiting On = Brevemente.\nCompare both sides using fuzzy title matching (case-insensitive, ignore punctuation/accents, match partial titles).\nFor each Trello A Fazer card NOT in Dashboard Active, add it as: - [ ] **Card Name**\nFor each Trello Brevemente card NOT in Dashboard Waiting On, add it as: - [ ] **Card Name**\nFor each Dashboard Active task NOT in Trello A Fazer, create a Trello card: curl -s -X POST \"https://api.trello.com/1/cards?key=$TRELLO_KEY&token=$TRELLO_TOKEN\" -d \"idList=692ef0efcda3c6ad22f446b0\" --data-urlencode \"name=<task title>\"\nFor each Dashboard Waiting On task NOT in Trello Brevemente, create a Trello card: curl -s -X POST \"https://api.trello.com/1/cards?key=$TRELLO_KEY&token=$TRELLO_TOKEN\" -d \"idList=5a38df428080f0d513df0672\" --data-urlencode \"name=<task title>\"\nNote: CSG: i18n and CSG: validacoes are in Dashboard Active but Trello Brevemente \u2014 this is intentional (different priority views), do NOT move or duplicate them.\nIf dashboard was updated, PUT the new markdown to the API.\nSkip items in ## Done.\n\nSTEP 1: Fetch tasks from local API\nRun: curl -s \"http://localhost:7600/api/tasks\"\nParse the markdown: ## Active = current tasks, ## Waiting On = brevemente items.\nEach task line: - [ ] **Title** - description\n\nSTEP 2: Fetch calendar events\nRun: curl -s \"https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=$(date -u +%Y-%m-%dT00:00:00Z)&timeMax=$(date -u +%Y-%m-%dT23:59:59Z)&singleEvents=true&orderBy=startTime&key=$GOOGLE_API_KEY\" (source .env first)\nIf calendar API fails or no GOOGLE_API_KEY, skip calendar section and note 'Calendario indisponivel'.\nAlso try tomorrow's events with tomorrow's date.\n\nSTEP 3: Format the digest as Slack mrkdwn\nFormat example:\n:lizard: _Task List -- Qui 05/03, 09:00_\n\n:alarm_clock: *Agenda de Hoje*\n- List today's events with times. ~strikethrough~ past events. Mark current/next with <- _agora_ / _proximo_\n\n:wrench: *Dev (por prioridade)*\n1. dev-related Active tasks\n\n:clipboard: *Outras*\n- Non-dev Active tasks\n\n:date: *Brevemente*\n- Waiting On tasks\n\n:calendar: *Amanha*\n- Tomorrow's events (only if any)\n\nUse Portuguese day names: Seg, Ter, Qua, Qui, Sex.\n\nAt the very end of the message, add a link to the dashboard:\n<http://100.90.155.85:7600|:kanban: Ekus App>\n\nSTEP 4: Send via Slack Webhook\nsource .env\nBuild the JSON payload with the formatted message. Use python3 to properly escape the message for JSON.\nExample:\npython3 -c \"\nimport json, subprocess\nmsg = '''<your formatted message>'''\npayload = json.dumps({'text': msg})\nsubprocess.run(['curl', '-s', '-X', 'POST', '$SLACK_WEBHOOK_URL', '-H', 'Content-type: application/json', '--data-raw', payload])\n\"\nThe webhook URL is in $SLACK_WEBHOOK_URL env var.\n\nKeep concise. Bullet points, no prose. Do NOT save to memory files.",
       "enabled": true
     },
     {
@@ -27,6 +27,97 @@
       "schedule": "*/10 6-23 * * *",
       "prompt": "You are Ekus checking for new messages. Working directory: ~/ekus\n\nSTEP 1: Load state\nsource .env\nRead config/message-checker-state.json for last_slack_ts and last_whatsapp_check.\nIf file doesn't exist, create it with: {\"last_slack_ts\": \"0\", \"last_whatsapp_check\": \"\"}\n\nSTEP 2: Check Slack DM\nFetch recent messages from Goncalo's DM channel:\ncurl -s \"https://slack.com/api/conversations.history?channel=D0ADZB7D733&oldest=$LAST_SLACK_TS&limit=20\" -H \"Authorization: Bearer $SLACK_BOT_TOKEN\"\nFilter messages where user is U091FP30H9V (Goncalo). Ignore bot messages.\nIf the API returns not_authed or invalid_auth, skip Slack and note the error.\n\nSTEP 3: Process new messages\nFor each new message from Goncalo:\n- If it looks like a task request (add task, lembra-me, tarefa, task, todo):\n  Create a Trello card: curl -s -X POST \"https://api.trello.com/1/cards?key=$TRELLO_KEY&token=$TRELLO_TOKEN\" -d \"idList=692ef0efcda3c6ad22f446b0\" --data-urlencode \"name=<task_name>\"\n  Reply acknowledging the task was added.\n- If it looks like a scheduling request (schedule, agendar, marca):\n  Create Trello card. Reply confirming.\n- Otherwise: reply saying you noted it.\n\nSTEP 4: Reply via Slack Webhook\nUse python3 to send reply via webhook:\npython3 -c \"import json,subprocess; subprocess.run(['curl','-s','-X','POST','$SLACK_WEBHOOK_URL','-H','Content-type: application/json','--data-raw',json.dumps({'text':'<reply>'})])\"\n\nSTEP 5: Update state\nWrite updated timestamps to config/message-checker-state.json.\n\nIf no new messages found, exit silently. Do NOT save to memory files.",
       "enabled": false
+    },
+    {
+      "id": "easter-urgent-invites-morning",
+      "description": "Morning reminder: invite family + get Quinta dos Cafanhotos contact",
+      "schedule": "0 9 16 3 *",
+      "prompt": "You are Ekus. Send a Slack reminder. source .env and send via webhook: ':bell: *Lembrete manh\u00e3:* Convidar fam\u00edlia para a P\u00e1scoa + obter contacto da Quinta dos Cafanhotos'. Use python3 to POST to $SLACK_WEBHOOK_URL with Content-type application/json.",
+      "enabled": true
+    },
+    {
+      "id": "easter-lamb-order-evening",
+      "description": "Evening reminder: order lamb at Talho de Tires",
+      "schedule": "0 20 16 3 *",
+      "prompt": "You are Ekus. Send a Slack reminder. source .env and send via webhook: ':bell: *Lembrete noite:* Encomendar borrego no Talho de Tires'. Use python3 to POST to $SLACK_WEBHOOK_URL with Content-type application/json.",
+      "enabled": true
+    },
+    {
+      "id": "easter-lamb-order-morning",
+      "description": "Morning reminder: order lamb at Talho de Tires",
+      "schedule": "0 9 17 3 *",
+      "prompt": "You are Ekus. Send a Slack reminder. source .env and send via webhook: ':bell: *Lembrete manh\u00e3:* Encomendar borrego no Talho de Tires'. Use python3 to POST to $SLACK_WEBHOOK_URL with Content-type application/json.",
+      "enabled": true
+    },
+    {
+      "id": "easter-dona-ana-evening",
+      "description": "Evening reminder: coordinate cleaning with Dona Ana",
+      "schedule": "0 19 29 3 *",
+      "prompt": "You are Ekus. Send a Slack reminder. source .env and send via webhook: ':bell: *Lembrete noite:* Coordenar limpeza com Dona Ana para a P\u00e1scoa'. Use python3 to POST to $SLACK_WEBHOOK_URL with Content-type application/json.",
+      "enabled": true
+    },
+    {
+      "id": "easter-dona-ana-morning",
+      "description": "Morning reminder: coordinate cleaning with Dona Ana",
+      "schedule": "0 8 30 3 *",
+      "prompt": "You are Ekus. Send a Slack reminder. source .env and send via webhook: ':bell: *Lembrete manh\u00e3:* Coordenar limpeza com Dona Ana para a P\u00e1scoa'. Use python3 to POST to $SLACK_WEBHOOK_URL with Content-type application/json.",
+      "enabled": true
+    },
+    {
+      "id": "easter-baked-cod-evening",
+      "description": "Evening reminder: order baked cod from Quinta dos Cafanhotos",
+      "schedule": "0 19 31 3 *",
+      "prompt": "You are Ekus. Send a Slack reminder. source .env and send via webhook: ':bell: *Lembrete noite:* Encomendar bacalhau assado da Quinta dos Cafanhotos'. Use python3 to POST to $SLACK_WEBHOOK_URL with Content-type application/json.",
+      "enabled": true
+    },
+    {
+      "id": "easter-baked-cod-morning",
+      "description": "Morning reminder: order baked cod from Quinta dos Cafanhotos",
+      "schedule": "0 8 1 4 *",
+      "prompt": "You are Ekus. Send a Slack reminder. source .env and send via webhook: ':bell: *Lembrete manh\u00e3:* Encomendar bacalhau assado da Quinta dos Cafanhotos'. Use python3 to POST to $SLACK_WEBHOOK_URL with Content-type application/json.",
+      "enabled": true
+    },
+    {
+      "id": "easter-shopping-evening",
+      "description": "Evening reminder: buy appetizers and drinks for Easter",
+      "schedule": "0 19 1 4 *",
+      "prompt": "You are Ekus. Send a Slack reminder. source .env and send via webhook: ':bell: *Lembrete noite:* Comprar aperitivos e bebidas para a P\u00e1scoa'. Use python3 to POST to $SLACK_WEBHOOK_URL with Content-type application/json.",
+      "enabled": true
+    },
+    {
+      "id": "easter-shopping-morning",
+      "description": "Morning reminder: buy appetizers and drinks for Easter",
+      "schedule": "0 8 2 4 *",
+      "prompt": "You are Ekus. Send a Slack reminder. source .env and send via webhook: ':bell: *Lembrete manh\u00e3:* Comprar aperitivos e bebidas para a P\u00e1scoa'. Use python3 to POST to $SLACK_WEBHOOK_URL with Content-type application/json.",
+      "enabled": true
+    },
+    {
+      "id": "easter-desserts-evening",
+      "description": "Evening reminder: buy desserts for Easter",
+      "schedule": "0 19 2 4 *",
+      "prompt": "You are Ekus. Send a Slack reminder. source .env and send via webhook: ':bell: *Lembrete noite:* Comprar sobremesas para a P\u00e1scoa'. Use python3 to POST to $SLACK_WEBHOOK_URL with Content-type application/json.",
+      "enabled": true
+    },
+    {
+      "id": "easter-desserts-morning",
+      "description": "Morning reminder: buy desserts for Easter",
+      "schedule": "0 8 3 4 *",
+      "prompt": "You are Ekus. Send a Slack reminder. source .env and send via webhook: ':bell: *Lembrete manh\u00e3:* Comprar sobremesas para a P\u00e1scoa'. Use python3 to POST to $SLACK_WEBHOOK_URL with Content-type application/json.",
+      "enabled": true
+    },
+    {
+      "id": "easter-house-prep-evening",
+      "description": "Evening reminder: Easter house prep day tomorrow",
+      "schedule": "0 19 3 4 *",
+      "prompt": "You are Ekus. Send a Slack reminder. source .env and send via webhook: ':bell: *Lembrete noite:* Amanh\u00e3 \u00e9 dia de preparar a casa para a P\u00e1scoa'. Use python3 to POST to $SLACK_WEBHOOK_URL with Content-type application/json.",
+      "enabled": true
+    },
+    {
+      "id": "easter-house-prep-morning",
+      "description": "Morning reminder: Easter house prep day",
+      "schedule": "0 8 4 4 *",
+      "prompt": "You are Ekus. Send a Slack reminder. source .env and send via webhook: ':bell: *Lembrete manh\u00e3:* Hoje \u00e9 dia de preparar a casa para a P\u00e1scoa'. Use python3 to POST to $SLACK_WEBHOOK_URL with Content-type application/json.",
+      "enabled": true
     }
   ]
 }
