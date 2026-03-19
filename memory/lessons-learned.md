@@ -78,6 +78,9 @@ useEffect(() => {
 ```
 This ensures output is always attributed to the correct job, even during the transition between jobs.
 
+### Session Context — Inject Conversation History Into `claude -p` (2026-03-17)
+`claude -p` is stateless — each invocation has no memory of previous calls. To maintain conversation context across messages in a session, the gateway (`_build_conversation_prompt()` in `main.py`) collects previous completed jobs from the same `conversation_id`, reads their prompts + log file outputs, and wraps them in `<conversation_history>` tags prepended to the current prompt. This gives Claude the illusion of a multi-turn conversation. **Key details:** (1) Only includes completed/failed jobs (not running ones, to avoid race conditions); (2) Prioritizes recent turns — if history exceeds 80K chars, it re-collects from newest to oldest; (3) Uses `full_prompt` field from YAML (not truncated `prompt`); (4) Reads output from `.log` files, not YAML summary. Alternative: `claude -p --resume <id>` uses Claude Code's internal session persistence but is harder to control with `stream-json` mode.
+
 ### Chat SSE Stream Field Mismatch (2026-03-12)
 The gateway SSE stream sends `{type: "output", content: "..."}` but `use-job-stream.ts` was reading `data.text` instead of `data.content`. This caused: (1) `undefined` prepended to output, (2) crash on `undefined.length` fell into catch block which appended raw JSON string. Fixed by using `data.content ?? data.text ?? ''`. Also: jobs submitted via API (not typed by user) show as user messages in Chat tab — could be improved by distinguishing API-submitted vs user-submitted jobs.
 
