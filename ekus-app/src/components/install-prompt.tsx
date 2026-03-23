@@ -30,7 +30,7 @@ export function InstallPrompt() {
   useEffect(() => {
     // Already installed or dismissed
     if (isInStandaloneMode()) return;
-    if (localStorage.getItem('ekus-install-dismissed')) return;
+    if (localStorage.getItem('ekoa-install-dismissed')) return;
 
     // Chrome/Android: capture the install prompt event
     const handler = (e: Event) => {
@@ -65,7 +65,7 @@ export function InstallPrompt() {
   const handleDismiss = () => {
     setShowBanner(false);
     setDismissed(true);
-    localStorage.setItem('ekus-install-dismissed', '1');
+    localStorage.setItem('ekoa-install-dismissed', '1');
   };
 
   if (dismissed || isInStandaloneMode()) return null;
@@ -82,18 +82,18 @@ export function InstallPrompt() {
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
             className="fixed bottom-20 left-3 right-3 z-[90] rounded-2xl p-4 shadow-xl"
             style={{
-              background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
-              boxShadow: '0 8px 32px rgba(5, 150, 105, 0.3)',
+              background: 'linear-gradient(135deg, #2a9d8f 0%, #1e7a6e 100%)',
+              boxShadow: '0 8px 32px rgba(42, 157, 143, 0.3)',
             }}
           >
             <div className="flex items-start gap-3">
               {/* App icon */}
               <div className="flex-shrink-0 w-12 h-12 rounded-xl overflow-hidden shadow-lg bg-white/20 flex items-center justify-center">
-                <img src="/icon-192.png" alt="Ekus" className="w-10 h-10 rounded-lg" />
+                <img src="/icon-192.png" alt="Ekoa" className="w-10 h-10 rounded-lg" />
               </div>
 
               <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-semibold text-white">Install Ekus</h3>
+                <h3 className="text-sm font-semibold text-white">Install Ekoa</h3>
                 <p className="text-xs text-white/80 mt-0.5 leading-relaxed">
                   Add to your home screen for a full-screen app experience with quick access.
                 </p>
@@ -115,7 +115,7 @@ export function InstallPrompt() {
             <button
               onClick={handleInstall}
               className="w-full mt-3 py-2.5 rounded-xl text-sm font-semibold transition-colors"
-              style={{ background: 'white', color: '#059669' }}
+              style={{ background: 'white', color: '#2a9d8f' }}
             >
               {isIos() ? 'How to Install' : 'Install App'}
             </button>
@@ -143,7 +143,7 @@ export function InstallPrompt() {
             >
               <div className="w-10 h-1 rounded-full mx-auto mb-5" style={{ background: 'var(--text-muted)' }} />
               <h3 className="text-lg font-bold mb-4" style={{ color: 'var(--text)' }}>
-                Install Ekus on iPhone
+                Install Ekoa on iPhone
               </h3>
 
               <div className="space-y-4">
@@ -165,7 +165,7 @@ export function InstallPrompt() {
               </div>
 
               <p className="text-xs mt-4 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-                Ekus will appear on your home screen and open as a full-screen app, just like a native app.
+                Ekoa will appear on your home screen and open as a full-screen app, just like a native app.
               </p>
 
               <button

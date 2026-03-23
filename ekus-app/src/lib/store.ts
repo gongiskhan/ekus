@@ -10,6 +10,8 @@ interface AppStore {
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
   toggleSidebar: () => void;
+  menuOpen: boolean;
+  setMenuOpen: (open: boolean) => void;
 }
 
 export const useAppStore = create<AppStore>()(
@@ -22,6 +24,8 @@ export const useAppStore = create<AppStore>()(
       sidebarOpen: false,
       setSidebarOpen: (open) => set({ sidebarOpen: open }),
       toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
+      menuOpen: false,
+      setMenuOpen: (open) => set({ menuOpen: open }),
     }),
     {
       name: 'ekus-app-store',

@@ -38,7 +38,7 @@ export function JobRow({ job, onToggle, onRunNow, onDelete, logs }: JobRowProps)
           }}
           className="flex-shrink-0 w-11 h-6 rounded-full p-0.5 transition-colors"
           style={{
-            background: job.enabled ? 'var(--primary)' : '#d1d5db',
+            background: job.enabled ? 'var(--primary)' : 'rgba(255,255,255,0.12)',
           }}
         >
           <motion.div
@@ -101,7 +101,7 @@ export function JobRow({ job, onToggle, onRunNow, onDelete, logs }: JobRowProps)
                 <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-muted)' }}>
                   Prompt
                 </label>
-                <p className="text-xs p-2 rounded-lg bg-white/30 whitespace-pre-wrap" style={{ color: 'var(--text-secondary)' }}>
+                <p className="text-xs p-2 rounded-lg bg-black/20 whitespace-pre-wrap" style={{ color: 'var(--text-secondary)' }}>
                   {job.prompt}
                 </p>
               </div>
@@ -110,7 +110,7 @@ export function JobRow({ job, onToggle, onRunNow, onDelete, logs }: JobRowProps)
                 <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-muted)' }}>
                   Schedule
                 </label>
-                <code className="text-xs px-2 py-1 rounded bg-white/30" style={{ color: 'var(--text-secondary)' }}>
+                <code className="text-xs px-2 py-1 rounded bg-black/20" style={{ color: 'var(--text-secondary)' }}>
                   {job.schedule}
                 </code>
               </div>
@@ -120,7 +120,7 @@ export function JobRow({ job, onToggle, onRunNow, onDelete, logs }: JobRowProps)
                   <label className="text-xs font-medium block mb-1" style={{ color: 'var(--text-muted)' }}>
                     Recent Logs
                   </label>
-                  <div className="max-h-32 overflow-y-auto rounded-lg bg-white/30 p-2">
+                  <div className="max-h-32 overflow-y-auto rounded-lg bg-black/20 p-2">
                     {logs.map((log, i) => (
                       <p key={i} className="text-xs font-mono" style={{ color: 'var(--text-secondary)' }}>
                         {log}

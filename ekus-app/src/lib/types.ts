@@ -17,6 +17,7 @@ export interface Job {
 export interface ChatSession {
   id: string;
   name: string;
+  claude_session_id?: string;
   created_at: string;
   updated_at?: string;
   job_count?: number;
@@ -64,4 +65,20 @@ export interface Note {
   created_at: string;
 }
 
-export type Tab = 'chat' | 'tasks' | 'scheduler' | 'memory' | 'notes';
+export interface VoiceCorrection {
+  id: number;
+  original: string;
+  corrected: string;
+  language: string;
+  frequency: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VoicePreferences {
+  language: 'pt' | 'en';
+  cleanup_enabled: boolean;
+  vad_sensitivity: string;
+}
+
+export type Tab = 'chat' | 'tasks' | 'scheduler' | 'memory' | 'notes' | 'voice' | 'projects';

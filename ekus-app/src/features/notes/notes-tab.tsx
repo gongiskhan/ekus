@@ -157,7 +157,7 @@ export function NotesTab() {
     <div className="flex flex-col h-full pb-32">
       {/* Input area */}
       <div className="px-4 pt-4 pb-2 flex-shrink-0">
-        <div className="glass rounded-xl p-3 flex gap-2 items-end">
+        <div className="glass-panel rounded-2xl flex items-center px-4 py-3">
           <textarea
             ref={textareaRef}
             value={draft}
@@ -171,17 +171,26 @@ export function NotesTab() {
             className="flex-1 bg-transparent border-none outline-none resize-none text-sm"
             style={{ color: 'var(--text)', minHeight: 24 }}
           />
-          <button
-            onClick={addNote}
-            disabled={!draft.trim()}
-            className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-opacity disabled:opacity-30"
-            style={{ background: 'var(--primary)', color: 'white' }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-          </button>
+          {draft.trim() ? (
+            <button
+              onClick={addNote}
+              className="flex-shrink-0 ml-2 w-8 h-8 rounded-full flex items-center justify-center"
+              style={{ background: 'var(--primary)', color: 'white' }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </button>
+          ) : (
+            <button className="ml-2 text-slate-400 hover:text-slate-200 flex-shrink-0">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                <line x1="12" y1="19" x2="12" y2="22" />
+              </svg>
+            </button>
+          )}
         </div>
       </div>
 
@@ -201,36 +210,33 @@ export function NotesTab() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, x: -100 }}
               transition={{ duration: 0.2 }}
-              className="glass rounded-xl p-3 mb-2"
+              className="glass-panel rounded-2xl p-4 mb-3 relative group cursor-pointer transition-transform active:scale-[0.98]"
             >
-              {/* Note content */}
-              <pre
-                className="text-sm whitespace-pre-wrap font-sans mb-2 leading-relaxed"
-                style={{ color: 'var(--text)' }}
-              >
-                {note.content}
-              </pre>
+              {/* Teal hover glow from left */}
+              <div className="absolute inset-0 bg-gradient-to-r from-[rgba(42,157,143,0.08)] to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
 
-              {/* Footer: time + actions */}
-              <div className="flex items-center justify-between">
-                <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                  {timeAgo(note.created_at)}
-                </span>
-
-                <div className="flex items-center gap-1">
-                  {/* Action menu toggle */}
-                  <button
-                    onClick={() => setActionMenu(actionMenu === note.id ? null : note.id)}
-                    className="p-1.5 rounded-lg transition-colors min-h-[32px] min-w-[32px] flex items-center justify-center"
-                    style={{ color: actionMenu === note.id ? 'var(--primary)' : 'var(--text-muted)' }}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                      <circle cx="12" cy="5" r="2" />
-                      <circle cx="12" cy="12" r="2" />
-                      <circle cx="12" cy="19" r="2" />
-                    </svg>
-                  </button>
+              {/* Header: title + menu */}
+              <div className="flex items-start justify-between relative z-10">
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-lg font-medium text-slate-100 leading-snug">
+                    {note.content.split('\n')[0].slice(0, 60)}
+                  </h3>
+                  <p className="text-sm text-slate-400 mt-1">
+                    {timeAgo(note.created_at)}
+                  </p>
                 </div>
+
+                {/* "..." menu button */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); setActionMenu(actionMenu === note.id ? null : note.id); }}
+                  className="p-2 rounded-full bg-slate-800/50 text-slate-300 hover:bg-slate-700/50 flex-shrink-0 ml-2 relative z-10"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="6" cy="12" r="2" />
+                    <circle cx="12" cy="12" r="2" />
+                    <circle cx="18" cy="12" r="2" />
+                  </svg>
+                </button>
               </div>
 
               {/* Action buttons (expanded) */}

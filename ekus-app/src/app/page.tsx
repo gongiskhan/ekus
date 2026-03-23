@@ -4,13 +4,15 @@ import { useEffect, useState } from 'react';
 import useSWR from 'swr';
 import { useAppStore } from '@/lib/store';
 import { api } from '@/lib/api';
-import { GlassPanel } from '@/components/glass-panel';
 import { BottomNav } from '@/components/bottom-nav';
+import { SideMenu } from '@/components/side-menu';
 import { ChatTab } from '@/features/chat/chat-tab';
 import { TasksTab } from '@/features/tasks/tasks-tab';
 import { SchedulerTab } from '@/features/scheduler/scheduler-tab';
 import { MemoryTab } from '@/features/memory/memory-tab';
 import { NotesTab } from '@/features/notes/notes-tab';
+import { VoiceTab } from '@/features/voice/voice-tab';
+import { ProjectsTab } from '@/features/projects/projects-tab';
 import { InstallPrompt } from '@/components/install-prompt';
 import type { ChatSession } from '@/lib/types';
 
@@ -44,12 +46,15 @@ function HealthIndicator() {
   };
 
   return (
-    <span className="flex items-center gap-1.5 text-xs font-medium" style={{ color: colors[status] }}>
+    <span className="flex items-center gap-2 text-xs font-medium" style={{ color: colors[status] }}>
+      <span>{labels[status]}</span>
       <span
-        className={`w-2 h-2 rounded-full ${status === 'checking' ? 'animate-pulse' : ''}`}
-        style={{ background: colors[status] }}
+        className={`w-2.5 h-2.5 rounded-full ${status === 'checking' ? 'animate-pulse' : ''}`}
+        style={{
+          background: colors[status],
+          boxShadow: status === 'online' ? '0 0 8px rgba(42, 157, 143, 0.8)' : 'none',
+        }}
       />
-      {labels[status]}
     </span>
   );
 }
@@ -68,47 +73,66 @@ function useSessionName(): string | null {
   return session?.name || null;
 }
 
+const tabTitles: Record<string, string> = {
+  chat: 'Chat',
+  tasks: 'Tasks',
+  scheduler: 'Schedule',
+  notes: 'Notes',
+  memory: 'Memory',
+  voice: 'Voice',
+  projects: 'Projects',
+};
+
 export default function Home() {
   const activeTab = useAppStore((s) => s.activeTab);
-  const toggleSidebar = useAppStore((s) => s.toggleSidebar);
+  const setMenuOpen = useAppStore((s) => s.setMenuOpen);
   const sessionName = useSessionName();
 
   useEffect(() => {
     if ('serviceWorker' in navigator) {
-      // Force update: unregister old SW, clear caches, re-register
       navigator.serviceWorker.getRegistrations().then((regs) => {
         regs.forEach((r) => r.update());
       });
       caches.keys().then((names) => {
-        names.filter((n) => n.startsWith('ekus-') && n !== 'ekus-20260312b')
+        names.filter((n) => (n.startsWith('ekus-') || n.startsWith('ekoa-')) && n !== 'ekoa-20260321a')
           .forEach((n) => caches.delete(n));
       });
       navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
   }, []);
 
+  const headerTitle = activeTab === 'chat' && sessionName
+    ? sessionName
+    : tabTitles[activeTab] || 'Chat';
+
   return (
     <div className="flex flex-col h-dvh" style={{ background: 'var(--bg)' }}>
       {/* Header */}
-      <GlassPanel className="flex items-center justify-between px-4 py-3 flex-shrink-0 z-30">
+      <header
+        className="flex items-center justify-between px-4 py-2 flex-shrink-0 z-30"
+        style={{
+          background: 'rgba(255, 255, 255, 0.04)',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+        }}
+      >
         <div className="flex items-center gap-2">
-          {activeTab === 'chat' && (
-            <button
-              onClick={toggleSidebar}
-              className="p-1.5 -ml-1.5 rounded-lg transition-colors hover:bg-black/5"
-              aria-label="Toggle conversations"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text)" strokeWidth="2" strokeLinecap="round">
-                <path d="M3 12h18M3 6h18M3 18h18" />
-              </svg>
-            </button>
-          )}
-          <h1 className="text-lg font-bold truncate max-w-[200px]" style={{ color: 'var(--text)' }}>
-            {activeTab === 'chat' && sessionName ? sessionName : 'Ekus'}
+          {/* Hamburger menu button — opens side menu */}
+          <button
+            onClick={() => setMenuOpen(true)}
+            className="flex flex-col gap-[5px] items-center justify-center w-10 h-10 -ml-1 rounded-lg transition-colors press-feedback"
+            aria-label="Toggle menu"
+            style={{ WebkitTapHighlightColor: 'transparent' }}
+          >
+            <span className="w-5 h-[1.5px] bg-white/70 rounded-full" />
+            <span className="w-5 h-[1.5px] bg-white/70 rounded-full" />
+            <span className="w-3.5 h-[1.5px] bg-white/70 rounded-full" />
+          </button>
+          <h1 className="text-base font-semibold truncate max-w-[200px]" style={{ color: 'var(--text)' }}>
+            {headerTitle}
           </h1>
         </div>
         <HealthIndicator />
-      </GlassPanel>
+      </header>
 
       {/* Content */}
       <main className="flex-1 overflow-hidden">
@@ -117,7 +141,12 @@ export default function Home() {
         {activeTab === 'scheduler' && <SchedulerTab />}
         {activeTab === 'notes' && <NotesTab />}
         {activeTab === 'memory' && <MemoryTab />}
+        {activeTab === 'voice' && <VoiceTab />}
+        {activeTab === 'projects' && <ProjectsTab />}
       </main>
+
+      {/* Side menu */}
+      <SideMenu />
 
       {/* Bottom nav */}
       <BottomNav />

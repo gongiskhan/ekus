@@ -243,33 +243,31 @@ export function TasksTab() {
           return (
             <div
               key={section.id}
-              className={`w-72 flex-shrink-0 rounded-xl p-2 transition-colors ${isDragOver ? 'bg-[var(--primary-light)]' : ''}`}
+              className={`w-[280px] flex-shrink-0 glass-panel rounded-3xl p-4 flex flex-col gap-3 max-h-[calc(100vh-12rem)] overflow-y-auto no-scrollbar transition-colors ${
+                isDragOver ? 'border-[var(--primary)] bg-[var(--primary-light)]' : ''
+              }`}
               onDragOver={(e) => {
                 e.preventDefault();
                 e.dataTransfer.dropEffect = 'move';
                 setDragOverSection(section.id);
               }}
               onDragLeave={(e) => {
-                // Only clear if leaving the column (not entering a child)
                 if (!e.currentTarget.contains(e.relatedTarget as Node)) {
                   setDragOverSection(null);
                 }
               }}
               onDrop={(e) => handleDrop(section.id, e)}
             >
-              <div className="flex items-center justify-between mb-3 px-1">
-                <h3 className="text-sm font-semibold" style={{ color: 'var(--text)' }}>
+              <header className="flex items-center gap-2 px-2 pb-1">
+                <h2 className="text-lg font-bold text-white drop-shadow-sm">
                   {section.name}
-                </h3>
-                <span
-                  className="text-xs px-2 py-0.5 rounded-full"
-                  style={{ background: 'var(--primary-light)', color: 'var(--primary)' }}
-                >
+                </h2>
+                <span className="bg-[var(--accent)] text-white text-sm font-bold w-6 h-6 flex items-center justify-center rounded-full shadow-sm">
                   {sectionTasks.length}
                 </span>
-              </div>
+              </header>
 
-              <div className="space-y-0">
+              <div className="flex flex-col gap-2">
                 {sectionTasks.map((task) => (
                   <TaskCard
                     key={task.id}
@@ -285,10 +283,9 @@ export function TasksTab() {
 
               <button
                 onClick={() => setAddingTo(section.id)}
-                className="w-full mt-2 p-2 rounded-xl text-sm font-medium hover:bg-white/40 transition-colors flex items-center justify-center gap-1 min-h-[44px]"
-                style={{ color: 'var(--text-muted)', border: '1px dashed var(--border)' }}
+                className="w-full py-3 rounded-2xl border-[1.5px] border-dashed border-[rgba(42,157,143,0.5)] text-white font-semibold flex justify-center items-center gap-2 hover:bg-white/5 transition-colors min-h-[44px]"
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <line x1="12" y1="5" x2="12" y2="19" />
                   <line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
@@ -302,35 +299,33 @@ export function TasksTab() {
       {/* Add task modal */}
       <Modal open={addingTo !== null} onClose={() => setAddingTo(null)}>
         <div className="p-5">
-          <h3 className="text-base font-semibold mb-4" style={{ color: 'var(--text)' }}>
+          <h3 className="text-base font-semibold mb-4 text-white">
             Add Task
           </h3>
           <div className="space-y-3">
             <div>
-              <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>
+              <label className="text-xs font-medium mb-1 block text-[var(--text-secondary)]">
                 Title
               </label>
               <input
                 type="text"
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl text-sm bg-white/50 border-none outline-none min-h-[44px]"
-                style={{ color: 'var(--text)' }}
+                className="w-full px-3 py-2.5 rounded-xl text-sm text-white bg-white/5 border border-[var(--glass-border)] outline-none focus:border-[var(--primary)] transition-colors min-h-[44px] placeholder:text-[var(--text-muted)]"
                 placeholder="Task title"
                 autoFocus
                 onKeyDown={(e) => e.key === 'Enter' && addTask()}
               />
             </div>
             <div>
-              <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--text-secondary)' }}>
+              <label className="text-xs font-medium mb-1 block text-[var(--text-secondary)]">
                 Note (optional)
               </label>
               <input
                 type="text"
                 value={newNote}
                 onChange={(e) => setNewNote(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl text-sm bg-white/50 border-none outline-none min-h-[44px]"
-                style={{ color: 'var(--text)' }}
+                className="w-full px-3 py-2.5 rounded-xl text-sm text-white bg-white/5 border border-[var(--glass-border)] outline-none focus:border-[var(--primary)] transition-colors min-h-[44px] placeholder:text-[var(--text-muted)]"
                 placeholder="Additional details"
                 onKeyDown={(e) => e.key === 'Enter' && addTask()}
               />
@@ -338,8 +333,7 @@ export function TasksTab() {
             <div className="flex gap-2 pt-1">
               <button
                 onClick={() => setAddingTo(null)}
-                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-white/40 transition-colors min-h-[44px]"
-                style={{ color: 'var(--text-muted)' }}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-[var(--text-muted)] hover:bg-white/5 transition-colors min-h-[44px]"
               >
                 Cancel
               </button>

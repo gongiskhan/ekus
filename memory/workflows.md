@@ -11,13 +11,58 @@ aliases:
 
 ---
 
-## Dashboard (Ekus App)
+## Organize My Day
 
-The Ekus App is a Next.js static export served from the Mac Mini gateway at `http://100.90.155.85:7600/` (Tailscale).
+When the user asks to organize their day/tasks, follow this process:
+
+1. **Fetch current state** (in parallel):
+   - Dashboard tasks: `GET http://100.90.155.85:7600/api/tasks`
+   - Trello cards: all lists from `config/trello.json` (`boards.geral.lists.*`)
+   - Google Calendar: `gcal_list_events` for the day
+2. **Map user's tasks** to existing Trello cards and dashboard items — avoid duplicates
+3. **Trello updates** (in parallel):
+   - Create new cards for tasks not already in Trello (use `pos=top` for priorities)
+   - Rename/update existing cards if scope changed
+   - Move cards between lists if priority changed (e.g., Brevemente → A Fazer)
+4. **Dashboard update**: `PUT /api/tasks` with reorganized task list — priorities at the top of Active
+5. **Calendar reminders**: Create daily morning reminder (8:30 AM) with popup notification, recurring for the requested period, with task summary in description
+6. **Reply** with summary of all changes
+
+**Voice transcription note:** "ECOSH" = Ekus (dashboard), "ECHOA" = Ekoa (app builder project).
+
+---
+
+## Dashboard (Ekoa App)
+
+The Ekoa App (formerly Ekus) is a Next.js static export served from the Mac Mini gateway at `http://100.90.155.85:7600/` (Tailscale).
 Frontend: `ekus-app/` (Next.js, builds to `out/`, copied to `mac-mini/gateway/static/`).
 Backend: `mac-mini/gateway/main.py` (FastAPI) + `mac-mini/terminal/server.js` (Node.js PTY server).
-5 tabs: Chat (xterm.js WebSocket streaming), Tasks (kanban), Scheduler (CRUD), Memory (view/edit).
+Design: Dark theme (#0f1419) with teal accents (#2a9d8f), glass morphism, Ekoa branding.
+7 tabs: Chat, Tasks (kanban), Scheduler (CRUD), Notes (CRUD), Memory (view/edit), Voice (record/transcribe/TTS/WhatsApp), Projects.
 Deploy: `./scripts/mac-mini.sh deploy` (builds Next.js, rsyncs, restarts both services).
+
+### UI Redesign via Agent Teams
+For large UI redesigns spanning many components, use Agent Teams:
+1. Update `globals.css` (design tokens/variables) first — this is the foundation
+2. Spawn 3-4 agents in parallel, each handling a group of related components
+3. Give each agent the Stitch HTML references + the new CSS variable names
+4. Run `npm run build` after all agents complete to catch TypeScript/import errors
+5. Deploy to Mac Mini for visual verification
+
+### After Any Code Change (MANDATORY)
+Always deploy+restart after modifying frontend or backend code:
+```bash
+cd /Users/ggomes/Projects/ekus && ./scripts/mac-mini.sh deploy
+```
+This builds Next.js, rsyncs to Mac Mini, and restarts gateway + terminal server.
+Verify: `curl -s http://100.90.155.85:7600/health`
+
+### HTTPS Access (for browser mic/camera)
+- Gateway serves HTTPS on port 7443 natively (uvicorn dual-bind, no separate proxy)
+- URL: `https://goncalos-mac-mini-1.tail31efa.ts.net:7443/`
+- Certs at `mac-mini/gateway/certs/` (generated via `tailscale cert`, gitignored)
+- HTTPS auto-starts if certs exist (same process as HTTP, supports WebSocket + multipart)
+- Renew certs: `ssh mac-mini "/Applications/Tailscale.app/Contents/MacOS/Tailscale cert --cert-file ~/Projects/ekus/mac-mini/gateway/certs/cert.pem --key-file ~/Projects/ekus/mac-mini/gateway/certs/key.pem goncalos-mac-mini-1.tail31efa.ts.net"`
 
 ### Restart Services (Local — on Mac Mini)
 1. `lsof -ti:7600 | xargs kill -9 2>/dev/null || true` — stop gateway
@@ -241,6 +286,18 @@ Reusable process for planning family meals/events with multiple tasks spread ove
 
 Key: avoid Python heredocs for processing task content (numbers like `0222` cause syntax errors). Use file-based approach instead.
 
+### Cross-System Task Cleanup (proven 2026-03-23)
+When cancelling/removing tasks that exist across multiple systems:
+1. **Trello** — archive cards (`PUT /cards/{id}?closed=true`), batch with a for loop
+2. **Google Calendar** — delete events via `gcal_delete_event` MCP (can parallelize all calls)
+3. **Dashboard** — rebuild full task markdown (write to temp file, `PUT /api/tasks --data-binary @file`)
+4. **Crontab** — filter out tagged entries: `crontab -l | grep -v 'tag' | crontab -`
+5. **reminders.md** — clear or update the relevant section
+6. **Verify** each system independently after cleanup
+7. **Slack update** — notify with summary of what was removed and current state
+
+Tip: emoji tags (🐣) in task names make cross-system identification trivial.
+
 ---
 
 ## Mac Mini — Claude Code Auth (Manual PKCE Flow)
@@ -283,6 +340,30 @@ Key gotchas:
 - Claude Code tries macOS Keychain first, falls back to plaintext file
 - Access token expires in 8 hours but auto-refreshes via refresh token
 - Auth codes are single-use — if exchange fails, re-authorize
+
+---
+
+## Mac Mini — Channel System Deploy & Restart
+
+Deploy and restart the Claude Code Channel system on Mac Mini:
+
+1. **Deploy code**: `./scripts/mac-mini.sh deploy` (builds Next.js, rsyncs, restarts gateway+terminal)
+2. **Start channel session**: `./scripts/mac-mini.sh channel-start`
+   - Accepts interactive prompts automatically (development channels warning)
+   - If it prompts for API key vs claude.ai auth, select claude.ai (send `Down` then `Enter` via tmux)
+3. **Verify all services**:
+   ```bash
+   ./scripts/mac-mini.sh channel-status
+   # Should show: channel server OK, gateway reachable, tmux session ACTIVE
+   ```
+4. **Test round-trip**: Open http://100.90.155.85:7600, verify "Channel" badge, send a message
+
+Troubleshooting:
+- **Session dies immediately**: Check `tmux capture-pane` output — likely a `| tee` pipe issue (use `exec claude` without pipes)
+- **WebSocket 404**: Ensure `websockets` package is in `pyproject.toml` and installed (`uv sync`). **Critical**: the gateway process must be restarted AFTER installing websockets — a running process won't pick up the new package. Restart: `lsof -ti:7600 | xargs kill -9; nohup uv run python main.py > /tmp/ekus-gateway.log 2>&1 &`
+- **Reply not arriving**: Check gateway logs for `/api/channel/reply` errors — likely `GATEWAY_URL` env var issue in `.mcp.json`
+- **OAuth expired**: Run `./scripts/mac-mini.sh channel-stop`, then re-auth with tmux-based `claude auth login`, then `channel-start`
+- **After `channel-start`, always verify gateway is fresh**: `channel-start` only restarts the tmux Claude session, NOT the gateway. If gateway deps changed, restart it separately.
 
 ---
 
@@ -338,3 +419,44 @@ The `gongiskhan/claude-share` GitHub repo is a backup of `~/.claude/` config (se
 
 **Note:** Local `~/.claude/skills/` may have project-specific skills not in the repo (google-analytics, weather, worktree, etc.) — rsync without --delete preserves them.
 **Note:** `gh` CLI may not be authenticated — use `git clone` with HTTPS directly.
+
+## Fetch Stitch Design Screens
+
+Download screen mockups from a Google Stitch project (MCP tool).
+
+1. Load Stitch tools: `ToolSearch("select:mcp__stitch__get_screen")`
+2. Call `mcp__stitch__get_screen` for each screen (all in parallel):
+   - `name`: `projects/{projectId}/screens/{screenId}`
+   - `projectId` and `screenId` also required as separate params
+3. Extract `screenshot.downloadUrl` from each response
+4. Download images: `curl -L -o <filename>.png "<downloadUrl>"`
+5. Check `htmlCode` field — if it has a `downloadUrl`, download it too: `curl -L -o <filename>.html "<htmlCode.downloadUrl>"`
+6. If `htmlCode` is empty `{}`, screens are design-only mockups with no generated code
+
+**Notes:**
+- `htmlCode` availability depends on whether Stitch generated code for the screen. Regenerating/editing screens in Stitch can produce HTML where it was previously empty.
+- HTML files use Tailwind CSS CDN (`cdn.tailwindcss.com`) and are self-contained single-file pages.
+- Some HTML files can be very large (600KB+) due to embedded SVG backgrounds or inline image data — check with `wc -c` before reading.
+- The kanban/tasks screen in particular tends to have large embedded SVG noise textures.
+
+## Refresh Claude Code Auth on Mac Mini
+
+When the Mac Mini's Claude Code session shows "Not logged in":
+
+1. Start `claude auth login` in tmux on the Mac Mini:
+   ```bash
+   ssh ggomes@100.90.155.85 'export PATH="/opt/homebrew/bin:$HOME/.local/bin:$PATH" && tmux kill-session -t auth-refresh 2>/dev/null; tmux new-session -d -s auth-refresh && tmux send-keys -t auth-refresh "export PATH=\"$HOME/.local/bin:\$PATH\" && claude auth login --email goncalo.p.gomes@gmail.com" Enter'
+   ```
+2. Wait 3-5 seconds, then capture the OAuth URL:
+   ```bash
+   ssh ggomes@100.90.155.85 'export PATH="/opt/homebrew/bin:$PATH" && tmux capture-pane -t auth-refresh -p -J' 2>/dev/null
+   ```
+3. Open the `https://claude.ai/oauth/authorize?...` URL in a browser (can be any machine where you're logged into claude.ai)
+4. Click "Authorize" — use JS click via Chrome extension if coordinate click doesn't register
+5. The tmux process exchanges the code automatically; verify:
+   ```bash
+   ssh ggomes@100.90.155.85 'export PATH="$HOME/.local/bin:$PATH" && claude auth status'
+   ```
+6. Restart the ekus-claude session: `./scripts/mac-mini.sh channel-start`
+
+**Auto-renewal:** `scripts/refresh-claude-auth.sh` refreshes tokens before they expire. Deploy to Mac Mini and set up a cron job (every 6h) to prevent manual re-auth.

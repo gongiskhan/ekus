@@ -68,7 +68,7 @@ function SessionItem({ session, isActive, onSelect, onRename, onDelete }: Sessio
             setEditing(false);
           }}
           className="w-full px-2 py-1 text-sm rounded-lg border outline-none"
-          style={{ borderColor: 'var(--primary)', background: 'white', color: 'var(--text)' }}
+          style={{ borderColor: 'var(--primary)', background: 'var(--bg-secondary)', color: 'var(--text)' }}
         />
       </div>
     );
@@ -87,9 +87,8 @@ function SessionItem({ session, isActive, onSelect, onRename, onDelete }: Sessio
             setMenuOpen(true);
           }
         }}
-        className="w-full text-left px-3 py-2.5 flex items-center gap-2 rounded-lg transition-colors"
+        className={`w-full text-left px-3 py-2.5 flex items-center gap-2 rounded-lg transition-colors ${isActive ? 'nav-active' : ''}`}
         style={{
-          background: isActive ? 'var(--primary-light)' : 'transparent',
           color: 'var(--text)',
           minHeight: 44,
         }}
@@ -100,7 +99,7 @@ function SessionItem({ session, isActive, onSelect, onRename, onDelete }: Sessio
         <div className="flex-1 min-w-0">
           <div className="text-sm font-medium truncate">{session.name}</div>
           {session.updated_at && (
-            <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+            <div className="text-xs mt-0.5 text-slate-500">
               {timeAgo(session.updated_at)}
               {session.job_count ? ` · ${session.job_count} msg${session.job_count > 1 ? 's' : ''}` : ''}
             </div>
@@ -119,18 +118,23 @@ function SessionItem({ session, isActive, onSelect, onRename, onDelete }: Sessio
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 0.1 }}
               className="absolute right-2 top-1 z-[71] rounded-lg shadow-lg overflow-hidden"
-              style={{ background: 'white', border: '1px solid var(--border)' }}
+              style={{
+                background: 'rgba(26, 35, 50, 0.95)',
+                backdropFilter: 'blur(24px)',
+                border: '1px solid rgba(255, 255, 255, 0.12)',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+              }}
             >
               <button
                 onClick={() => { setMenuOpen(false); setEditName(session.name); setEditing(true); }}
-                className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-50"
+                className="block w-full text-left px-4 py-2 text-sm hover:bg-white/10 transition-colors"
                 style={{ color: 'var(--text)' }}
               >
                 Rename
               </button>
               <button
                 onClick={() => { setMenuOpen(false); onDelete(); }}
-                className="block w-full text-left px-4 py-2 text-sm hover:bg-red-50"
+                className="block w-full text-left px-4 py-2 text-sm hover:bg-white/10 transition-colors"
                 style={{ color: 'var(--red)' }}
               >
                 Delete
@@ -192,7 +196,7 @@ export function SessionSidebar({ open, onClose }: SessionSidebarProps) {
         <div className="fixed inset-0 z-[60]">
           {/* Backdrop */}
           <motion.div
-            className="absolute inset-0 bg-black/20 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -203,7 +207,12 @@ export function SessionSidebar({ open, onClose }: SessionSidebarProps) {
           {/* Drawer */}
           <motion.div
             className="absolute left-0 top-0 bottom-0 w-[280px] z-[61] flex flex-col"
-            style={{ background: 'var(--bg)', borderRight: '1px solid var(--border)' }}
+            style={{
+              background: 'rgba(15, 20, 25, 0.95)',
+              backdropFilter: 'blur(24px)',
+              WebkitBackdropFilter: 'blur(24px)',
+              borderRight: '1px solid rgba(255, 255, 255, 0.08)',
+            }}
             initial={{ x: '-100%' }}
             animate={{ x: 0 }}
             exit={{ x: '-100%' }}
@@ -220,8 +229,9 @@ export function SessionSidebar({ open, onClose }: SessionSidebarProps) {
               <h2 className="text-sm font-semibold" style={{ color: 'var(--text)' }}>Conversations</h2>
               <button
                 onClick={handleNewSession}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors"
-                style={{ background: 'var(--primary)', color: 'white' }}
+                className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors press-feedback min-h-[44px]"
+                style={{ border: '1px solid var(--primary)', color: 'var(--primary)', background: 'transparent' }}
+                aria-label="New conversation"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <path d="M12 5v14M5 12h14" />

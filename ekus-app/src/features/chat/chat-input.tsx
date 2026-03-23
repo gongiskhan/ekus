@@ -6,16 +6,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 interface ChatInputProps {
   onSend: (prompt: string, files: File[]) => void;
   disabled?: boolean;
+  uploading?: boolean;
 }
 
-export function ChatInput({ onSend, disabled }: ChatInputProps) {
+export function ChatInput({ onSend, disabled, uploading }: ChatInputProps) {
   const [text, setText] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [showAttach, setShowAttach] = useState(false);
+  const [inputKey, setInputKey] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const cameraRef = useRef<HTMLInputElement>(null);
-  const photosRef = useRef<HTMLInputElement>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   const handleSend = useCallback(() => {
     const trimmed = text.trim();
@@ -23,6 +22,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
     onSend(trimmed, files);
     setText('');
     setFiles([]);
+    setShowAttach(false);
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
@@ -60,7 +60,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
     if (selected) {
       setFiles((prev) => [...prev, ...Array.from(selected)]);
     }
-    e.target.value = '';
+    setInputKey((k) => k + 1);
     setShowAttach(false);
   };
 
@@ -69,21 +69,24 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
   };
 
   return (
-    <div className="fixed bottom-[60px] left-0 right-0 glass border-t border-white/20 safe-bottom z-40">
+    <div className="fixed bottom-[76px] left-0 right-0 safe-bottom z-40 px-4 pb-2">
       {/* File previews */}
       {files.length > 0 && (
-        <div className="flex gap-2 px-3 pt-2 overflow-x-auto">
+        <div className="flex gap-2 px-3 pt-2 pb-1 overflow-x-auto">
           {files.map((file, i) => (
             <div key={i} className="relative flex-shrink-0">
               {file.type.startsWith('image/') ? (
                 <img
                   src={URL.createObjectURL(file)}
                   alt={file.name}
-                  className="w-14 h-14 rounded-lg object-cover"
+                  className="w-14 h-14 rounded-lg object-cover border border-white/10"
                 />
               ) : (
-                <div className="w-14 h-14 rounded-lg bg-white/50 flex items-center justify-center">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5">
+                <div
+                  className="w-14 h-14 rounded-lg flex items-center justify-center"
+                  style={{ background: 'rgba(255, 255, 255, 0.06)', border: '1px solid rgba(255, 255, 255, 0.1)' }}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5eead4" strokeWidth="1.5">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                     <path d="M14 2v6h6" />
                   </svg>
@@ -106,28 +109,41 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
       {/* Attach menu */}
       <AnimatePresence>
         {showAttach && (
+          <>
+          <div className="fixed inset-0 z-40" onClick={() => setShowAttach(false)} />
           <motion.div
-            className="absolute bottom-full left-3 mb-2 glass rounded-xl overflow-hidden"
+            className="absolute bottom-full left-3 mb-2 rounded-xl overflow-hidden z-50"
+            style={{
+              background: 'rgba(26, 35, 50, 0.95)',
+              backdropFilter: 'blur(24px)',
+              WebkitBackdropFilter: 'blur(24px)',
+              border: '1px solid rgba(255, 255, 255, 0.12)',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+            }}
             initial={{ opacity: 0, y: 8, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.95 }}
             transition={{ duration: 0.12 }}
           >
-            <button
-              className="flex items-center gap-2 px-4 py-3 text-sm hover:bg-white/40 w-full text-left min-h-[44px]"
+            <label
+              htmlFor="ekus-camera-input"
+              className="flex items-center gap-2 px-4 py-3 text-sm w-full text-left min-h-[44px] cursor-pointer transition-colors"
               style={{ color: 'var(--text)' }}
-              onClick={() => cameraRef.current?.click()}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                 <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
                 <circle cx="12" cy="13" r="4" />
               </svg>
               Camera
-            </button>
-            <button
-              className="flex items-center gap-2 px-4 py-3 text-sm hover:bg-white/40 w-full text-left min-h-[44px]"
+            </label>
+            <label
+              htmlFor="ekus-photos-input"
+              className="flex items-center gap-2 px-4 py-3 text-sm w-full text-left min-h-[44px] cursor-pointer transition-colors"
               style={{ color: 'var(--text)' }}
-              onClick={() => photosRef.current?.click()}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
@@ -135,34 +151,45 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
                 <path d="M21 15l-5-5L5 21" />
               </svg>
               Photos
-            </button>
-            <button
-              className="flex items-center gap-2 px-4 py-3 text-sm hover:bg-white/40 w-full text-left min-h-[44px]"
+            </label>
+            <label
+              htmlFor="ekus-file-input"
+              className="flex items-center gap-2 px-4 py-3 text-sm w-full text-left min-h-[44px] cursor-pointer transition-colors"
               style={{ color: 'var(--text)' }}
-              onClick={() => fileRef.current?.click()}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                 <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
               </svg>
               File
-            </button>
+            </label>
           </motion.div>
+          </>
         )}
       </AnimatePresence>
 
       {/* Hidden file inputs */}
-      <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileSelect} />
-      <input ref={photosRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
-      <input ref={fileRef} type="file" className="hidden" onChange={handleFileSelect} />
+      <input key={`cam-${inputKey}`} id="ekus-camera-input" type="file" accept="image/*" capture="environment" className="sr-only" onChange={handleFileSelect} />
+      <input key={`photo-${inputKey}`} id="ekus-photos-input" type="file" accept="image/*" className="sr-only" onChange={handleFileSelect} />
+      <input key={`file-${inputKey}`} id="ekus-file-input" type="file" className="sr-only" onChange={handleFileSelect} />
 
       {/* Input bar */}
-      <div className="flex items-end gap-2 p-3">
+      <div
+        className="flex items-end gap-2 p-2 rounded-2xl"
+        style={{
+          background: '#1a2636',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          boxShadow: '0 -2px 16px rgba(0, 0, 0, 0.25)',
+        }}
+      >
         <button
-          className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center hover:bg-white/40 transition-colors"
-          style={{ color: 'var(--text-muted)' }}
+          className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center press-feedback transition-colors"
+          style={{ background: 'rgba(255, 255, 255, 0.08)', border: '1px solid rgba(255, 255, 255, 0.1)' }}
           onClick={() => setShowAttach(!showAttach)}
+          aria-label={showAttach ? 'Close attachments' : 'Attach file'}
         >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round">
             <line x1="12" y1="5" x2="12" y2="19" />
             <line x1="5" y1="12" x2="19" y2="12" />
           </svg>
@@ -175,23 +202,28 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
           onKeyDown={handleKeyDown}
           onInput={handleInput}
           onPaste={handlePaste}
-          placeholder="Type a message"
+          placeholder="Type a message..."
           rows={1}
           disabled={disabled}
-          className="flex-1 resize-none rounded-2xl px-4 py-2.5 text-sm border-none outline-none bg-white/50 placeholder:text-gray-400"
-          style={{ maxHeight: 120, color: 'var(--text)' }}
+          className="flex-1 resize-none px-3 py-2 text-[16px] border-none outline-none bg-transparent text-white placeholder:text-white/40"
+          style={{ maxHeight: 120 }}
         />
 
         <button
           onClick={handleSend}
-          disabled={disabled || (!text.trim() && files.length === 0)}
-          className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-all disabled:opacity-40"
-          style={{ background: 'var(--primary)', color: 'white' }}
+          disabled={disabled || uploading || (!text.trim() && files.length === 0)}
+          className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center press-feedback disabled:opacity-30 transition-colors"
+          style={{ background: '#2a9d8f' }}
+          aria-label="Send message"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="22" y1="2" x2="11" y2="13" />
-            <polygon points="22 2 15 22 11 13 2 9 22 2" />
-          </svg>
+          {uploading ? (
+            <div className="w-5 h-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+          ) : (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13" />
+              <polygon points="22 2 15 22 11 13 2 9 22 2" />
+            </svg>
+          )}
         </button>
       </div>
     </div>

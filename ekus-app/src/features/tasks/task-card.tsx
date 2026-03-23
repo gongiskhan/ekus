@@ -36,37 +36,39 @@ export function TaskCard({
         e.dataTransfer.effectAllowed = 'move';
       }}
     >
-      <motion.div
-        className="glass rounded-xl p-3 mb-2 cursor-grab active:cursor-grabbing"
+      <motion.article
+        className={`rounded-2xl p-4 cursor-grab active:cursor-grabbing flex flex-col gap-3 ${
+          task.checked ? 'opacity-70' : ''
+        }`}
+        style={{
+          background: 'rgba(255, 255, 255, 0.1)',
+          backdropFilter: 'blur(24px)',
+          WebkitBackdropFilter: 'blur(24px)',
+          border: '1px solid rgba(255, 255, 255, 0.12)',
+          boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)',
+        }}
         initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
+        animate={{ opacity: task.checked ? 0.7 : 1, y: 0 }}
         transition={{ duration: 0.2 }}
       >
         {/* Main task */}
-        <div className="flex items-start gap-2">
-          <button
-            onClick={() => onToggle(task.id)}
-            className="flex-shrink-0 mt-0.5 min-w-[20px] min-h-[20px] w-5 h-5 rounded border-2 flex items-center justify-center transition-colors"
-            style={{
-              borderColor: task.checked ? 'var(--primary)' : 'var(--text-muted)',
-              background: task.checked ? 'var(--primary)' : 'transparent',
-            }}
-          >
-            {task.checked && (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            )}
-          </button>
+        <div className="flex items-start gap-3">
+          <input
+            type="checkbox"
+            checked={task.checked}
+            onChange={() => onToggle(task.id)}
+            className="custom-checkbox mt-0.5"
+          />
           <div className="flex-1 min-w-0">
-            <p
-              className={`text-sm font-medium leading-snug ${task.checked ? 'line-through opacity-50' : ''}`}
-              style={{ color: 'var(--text)' }}
+            <h3
+              className={`font-bold text-white leading-tight drop-shadow-sm ${
+                task.checked ? 'line-through text-white/80' : ''
+              }`}
             >
               {task.title}
-            </p>
+            </h3>
             {task.note && (
-              <p className="text-xs mt-0.5 leading-snug" style={{ color: 'var(--text-muted)' }}>
+              <p className="text-sm mt-1 leading-snug text-[var(--text-secondary)]">
                 {task.note}
               </p>
             )}
@@ -75,41 +77,33 @@ export function TaskCard({
 
         {/* Subtasks */}
         {task.subtasks.length > 0 && (
-          <div className="ml-7 mt-2 space-y-1">
+          <ul className="flex flex-col gap-2 pl-[2.25rem]">
             {task.subtasks.map((st: Subtask, i: number) => (
-              <div key={i} className="flex items-center gap-2">
-                <button
-                  onClick={() => onToggleSubtask(task.id, i)}
-                  className="flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors"
-                  style={{
-                    borderColor: st.checked ? 'var(--primary)' : 'var(--text-muted)',
-                    background: st.checked ? 'var(--primary)' : 'transparent',
-                  }}
-                >
-                  {st.checked && (
-                    <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                  )}
-                </button>
-                <span
-                  className={`text-xs ${st.checked ? 'line-through opacity-50' : ''}`}
-                  style={{ color: 'var(--text-secondary)' }}
-                >
+              <li key={i} className="flex items-center gap-2 text-sm text-white/80">
+                <input
+                  type="checkbox"
+                  checked={st.checked}
+                  onChange={() => onToggleSubtask(task.id, i)}
+                  className="custom-checkbox w-4 h-4"
+                />
+                <span className={st.checked ? 'line-through text-white/60' : ''}>
                   {st.text}
                 </span>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
 
         {/* Action buttons */}
-        <div className="flex items-center gap-1 mt-2 pt-2 border-t flex-wrap" style={{ borderColor: 'var(--border)' }}>
+        <div
+          className="flex items-center gap-1 pt-2 border-t flex-wrap"
+          style={{ borderColor: 'rgba(255, 255, 255, 0.08)' }}
+        >
           {actions.map((action, i) => (
             <button
               key={i}
               onClick={action.onClick}
-              className="px-2.5 py-1 rounded-lg text-xs font-medium transition-colors"
+              className="px-2.5 py-1 rounded-lg text-xs font-medium transition-colors hover:bg-white/10"
               style={{
                 color: 'var(--primary)',
                 background: 'var(--primary-light)',
@@ -131,8 +125,7 @@ export function TaskCard({
               </button>
               <button
                 onClick={() => setConfirmDelete(false)}
-                className="px-2 py-1 rounded text-xs font-medium hover:bg-white/40"
-                style={{ color: 'var(--text-muted)' }}
+                className="px-2 py-1 rounded text-xs font-medium text-[var(--text-muted)] hover:bg-white/10"
               >
                 No
               </button>
@@ -140,17 +133,17 @@ export function TaskCard({
           ) : (
             <button
               onClick={() => setConfirmDelete(true)}
-              className="p-1.5 rounded-lg hover:bg-red-50 transition-colors min-w-[32px] min-h-[32px] flex items-center justify-center"
+              className="p-1.5 rounded-lg hover:bg-white/10 transition-colors min-w-[32px] min-h-[32px] flex items-center justify-center text-[var(--text-muted)]"
               title="Delete"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18" />
                 <line x1="6" y1="6" x2="18" y2="18" />
               </svg>
             </button>
           )}
         </div>
-      </motion.div>
+      </motion.article>
     </div>
   );
 }

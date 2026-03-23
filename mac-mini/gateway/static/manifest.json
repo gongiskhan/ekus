@@ -1,11 +1,11 @@
 {
-  "name": "Ekus",
-  "short_name": "Ekus",
-  "description": "Personal assistant dashboard",
+  "name": "Ekoa",
+  "short_name": "Ekoa",
+  "description": "Personal assistant",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f0fdf4",
-  "theme_color": "#059669",
+  "background_color": "#0f1419",
+  "theme_color": "#2a9d8f",
   "orientation": "portrait",
   "icons": [
     { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" },

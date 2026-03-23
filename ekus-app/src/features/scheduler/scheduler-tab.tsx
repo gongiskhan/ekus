@@ -131,7 +131,7 @@ export function SchedulerTab() {
                 type="text"
                 value={newJob.id}
                 onChange={(e) => setNewJob((p) => ({ ...p, id: e.target.value }))}
-                className="w-full px-3 py-2.5 rounded-xl text-sm bg-white/50 border-none outline-none min-h-[44px]"
+                className="w-full px-3 py-2.5 rounded-xl text-sm bg-black/20 border-none outline-none min-h-[44px]"
                 style={{ color: 'var(--text)' }}
                 placeholder="my-job-id"
               />
@@ -144,7 +144,7 @@ export function SchedulerTab() {
                 type="text"
                 value={newJob.description}
                 onChange={(e) => setNewJob((p) => ({ ...p, description: e.target.value }))}
-                className="w-full px-3 py-2.5 rounded-xl text-sm bg-white/50 border-none outline-none min-h-[44px]"
+                className="w-full px-3 py-2.5 rounded-xl text-sm bg-black/20 border-none outline-none min-h-[44px]"
                 style={{ color: 'var(--text)' }}
                 placeholder="What this job does"
               />
@@ -157,7 +157,7 @@ export function SchedulerTab() {
                 type="text"
                 value={newJob.schedule}
                 onChange={(e) => setNewJob((p) => ({ ...p, schedule: e.target.value }))}
-                className="w-full px-3 py-2.5 rounded-xl text-sm bg-white/50 border-none outline-none min-h-[44px] font-mono"
+                className="w-full px-3 py-2.5 rounded-xl text-sm bg-black/20 border-none outline-none min-h-[44px] font-mono"
                 style={{ color: 'var(--text)' }}
                 placeholder="*/10 6-23 * * *"
               />
@@ -169,7 +169,7 @@ export function SchedulerTab() {
               <textarea
                 value={newJob.prompt}
                 onChange={(e) => setNewJob((p) => ({ ...p, prompt: e.target.value }))}
-                className="w-full px-3 py-2.5 rounded-xl text-sm bg-white/50 border-none outline-none resize-none"
+                className="w-full px-3 py-2.5 rounded-xl text-sm bg-black/20 border-none outline-none resize-none"
                 style={{ color: 'var(--text)', minHeight: 80 }}
                 placeholder="The prompt to execute"
               />
@@ -178,7 +178,7 @@ export function SchedulerTab() {
               <button
                 onClick={() => setNewJob((p) => ({ ...p, enabled: !p.enabled }))}
                 className="w-11 h-6 rounded-full p-0.5 transition-colors"
-                style={{ background: newJob.enabled ? 'var(--primary)' : '#d1d5db' }}
+                style={{ background: newJob.enabled ? 'var(--primary)' : 'rgba(255,255,255,0.12)' }}
               >
                 <div
                   className="w-5 h-5 rounded-full bg-white shadow-sm transition-transform"
@@ -192,7 +192,7 @@ export function SchedulerTab() {
             <div className="flex gap-2 pt-1">
               <button
                 onClick={() => setShowAdd(false)}
-                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-white/40 transition-colors min-h-[44px]"
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-white/10 transition-colors min-h-[44px]"
                 style={{ color: 'var(--text-muted)' }}
               >
                 Cancel

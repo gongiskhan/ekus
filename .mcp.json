@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "ekus-channel": {
+      "command": "bun",
+      "args": ["mac-mini/channel/server.ts"],
+      "env": {
+        "GATEWAY_URL": "http://100.90.155.85:7600"
+      }
+    }
+  }
+}

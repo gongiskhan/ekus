@@ -12,6 +12,7 @@ aliases:
 ## Table of Contents
 - [[#Dashboard & Task Storage]]
 - [[#Software Development]]
+- [[#Python / Package Management]]
 - [[#Email]]
 - [[#Invoice Collection (Faturas)]]
 - [[#Browser Automation]]
@@ -19,11 +20,14 @@ aliases:
 - [[#Hourly Digest]]
 - [[#Scheduling & Reminders]]
 - [[#Image Generation]]
-- [[#Voice / TTS]]
+- [[#Voice / TTS]] (includes faster-whisper, WebSocket streaming)
 - [[#Task Sync]]
 - [[#Portal das Finanças (e-fatura)]]
 - [[#Message Checker]]
 - [[#Mac Mini Remote Automation]]
+- [[#Skill Creator]]
+- [[#Claude Code Channels]]
+- [[#Frontend / UI]]
 - [[#People]]
 
 ---
@@ -95,7 +99,27 @@ const updateStatus = (s) => { statusRef.current = s; setStatus(s); };
 // In onerror: check statusRef.current, not status
 ```
 
+### Channel Mode File Uploads — Must Upload Before Sending (2026-03-20)
+In channel mode, `chat-tab.tsx` was passing `files.map(f => f.name)` (just filenames) to `channel.sendMessage()` instead of actually uploading the files first via `api.uploadFile()`. The upload endpoint returns `{path: "2026-03-20/uuid_filename.jpg"}` which must be stored as the file reference. Three things needed for images to work in chat: (1) Upload files via `/api/upload` before sending the channel message, pass returned paths; (2) Render `msg.files` array in chat bubbles (it existed on the message type but was never displayed); (3) Add CSS for images in `.markdown-content` (`max-width: 100%`, `height: auto`, `border-radius`). Also: `react-markdown` component overrides have `src` typed as `string | Blob | undefined` for `img` — needs explicit `typeof src === 'string'` guard.
+
+### Image URLs — Three Path Formats Need Unified Handling (2026-03-20)
+Image `src` and file attachment paths come in three formats that all need to resolve to `/api/uploads/{relative}`: (1) Already valid: `/api/uploads/...` or `http...` — pass through; (2) Absolute Mac Mini path: `/Users/.../uploads/2026-03-20/img.png` — regex extract after `uploads/`; (3) Relative upload path: `2026-03-20/img.png` — prefix with `/api/uploads/`. The shared `fixFileSrc()` in `markdown-renderer.tsx` handles all three. Both markdown images (via `MarkdownRenderer`) and file attachments (in `chat-tab.tsx`) must use this same function — duplicate URL logic is a bug magnet.
+
+### Mobile File Uploads — HEIC Format & Silent Failures (2026-03-20)
+iPhone photos are commonly `.heic` — must be in `ALLOWED_UPLOAD_TYPES` on the gateway or uploads silently fail. Additionally, the channel mode upload path in `chat-tab.tsx` had no `try-catch` — if the upload HTTP request returned a 400 (wrong format, too large), `Promise.all` resolved with error bodies (no `.path` field), but the message still tried to send with `undefined` paths. The user saw nothing happen. Fix: (1) Add `.heic`/`.heif` to allowed types in `main.py`; (2) Check `resp.ok` per-file and throw with the server's error detail; (3) Wrap uploads in try-catch with `channel.addErrorMessage()` for user feedback; (4) Add `uploading` state to show a spinner on the send button during upload.
+
 ## Software Development
+
+### `claude mcp add` — Variadic Header Flag Eats Positional Args
+The `-H`/`--header` option is variadic (`<header...>`), so it consumes all subsequent arguments including the server name and URL. Use `--` to separate options from positional args:
+```bash
+# Wrong — "stitch" gets consumed as a header value:
+claude mcp add -t http -H "X-Api-Key: ..." stitch https://example.com/mcp
+
+# Correct — use -- to stop option parsing:
+claude mcp add -t http -H "X-Api-Key: ..." -- stitch https://example.com/mcp
+```
+Also: there is no `--url` flag — the URL is a positional argument (`<commandOrUrl>`).
 
 ### Always Use Agent Teams for Complex Tasks
 Never try to do complex dev work inline. For anything beyond trivial edits:
@@ -112,6 +136,11 @@ Never try to do complex dev work inline. For anything beyond trivial edits:
 8. Messages auto-deliver via `SendMessage` — never poll inboxes
 9. Shutdown via `SendMessage(type: "shutdown_request")`, then `TeamDelete`
 10. Only declare success after tester confirms with screenshots
+
+### iOS Safari/PWA: File Input Picker Quirks
+On iOS Safari (especially in PWA/homescreen mode), programmatic `.click()` on `<input type="file">` is unreliable — even with `sr-only` (visually hidden). The `display: none` approach fails completely, `sr-only` works inconsistently. The bulletproof fix: use `<label htmlFor="input-id">` instead of `<button onClick={() => ref.click()}>`. The browser natively associates the label tap with the input, bypassing all JS click reliability issues. Give each input an `id` and use matching `htmlFor` on the label.
+
+**Second-use bug:** Even with `<label htmlFor>` and resetting `e.target.value = ''`, iOS/PWA won't re-trigger the file picker on the same input element a second time. Fix: use a React `key` that increments after each selection (e.g., `<input key={`photo-${inputKey}`} ...>`), forcing React to destroy and recreate the DOM element. A fresh input always works.
 
 ### Always Verify Work in Browser
 After any UI/frontend change, verify it works visually:
@@ -138,6 +167,12 @@ When asked for changes to roadmaps, configs, or docs — always commit and push 
 
 ### Parallel Agent Workers vs Full Agent Teams
 For large projects where work streams touch non-overlapping files (e.g., backend API vs frontend app), use parallel `Agent` tool calls with `run_in_background: true` instead of the full `TeamCreate`/`TaskCreate` flow. Simpler, less overhead, and just as effective when there are no inter-agent dependencies. Reserve Agent Teams for cases where agents need to communicate mid-task (e.g., one agent's output feeds another's input).
+
+### CWD Shifts During Long Agent Sessions
+Subagents may `cd` into subdirectories (e.g., `ekus-app/`), which changes the CWD for subsequent bash commands in the main agent too. Always use absolute paths (`/Users/ggomes/Projects/ekus/...`) when verifying files after agent teams finish. Relative paths like `ekus-app/src/...` will fail if CWD drifted.
+
+### Ralph Loop + Agent Team Delegation
+When running a Ralph loop with agent team delegation, the main agent just monitors progress each iteration (check TaskList, verify files). The team lead handles all coordination. Send a status check message to the team lead if a task stays in_progress for 5+ iterations — it may need a nudge. Don't spawn duplicate teams on re-entry — check if team already exists.
 
 ### dashboard.html Is Too Large to Read in One Go
 The file exceeds 25k tokens. Read in chunks with `offset` + `limit` params, or search for specific sections with Grep.
@@ -248,8 +283,14 @@ Trello card IDs can look very similar (e.g., `69aa7497...` vs `69aa7496...`). Al
 ### Archive via Form Body, Not Query String
 Use `-d "closed=true"` (form body) instead of `?closed=true` (query string). The query string version intermittently returns "missing scopes".
 
-### Trello Token Is Read-Only (2026-03-16)
-The current Trello token only has `read` scope. ALL write operations (move cards, archive, create) return `{"message":"missing scopes"}`. To fix: regenerate at `https://trello.com/1/authorize?expiration=never&scope=read,write&response_type=token&key=$TRELLO_KEY` and update `.env`. Until then, Trello sync is one-way (Trello → Dashboard only).
+### Trello Token Has Read+Write Scope (updated 2026-03-23)
+Token was regenerated with `read,write` scope. Archive, create, and move operations all work now. Two-way sync (Trello ↔ Dashboard) is fully operational.
+
+### trello.json Config Structure
+The config at `config/trello.json` uses nested keys: `boards.geral.id` for the board ID and `boards.geral.lists.a_fazer` etc. for list IDs. There is NO top-level `board_id` key. Always parse with the correct path: `json['boards']['geral']['id']`.
+
+### "unauthorized permission requested" = Wrong List ID
+The Trello API returns `unauthorized permission requested` when you use a non-existent or wrong list ID — NOT a clear 404. Always verify list IDs via `GET /1/boards/{boardId}/lists` if you get this error. The Eventualmente list ID had a typo in `config/trello.json` (`3` vs `4` in one character) that caused silent failures.
 
 ## Hourly Digest
 
@@ -258,6 +299,9 @@ The current Trello token only has `read` scope. ALL write operations (move cards
 
 ### Google Calendar MCP Requires User Permission
 The `gcal_list_events` MCP tool requires interactive user approval. In `claude -p` (non-interactive), this silently fails. For automated digests, pre-approve the tool in `.claude/settings.json` under `allowedTools`.
+
+### Google Calendar MCP Works in Interactive Mode (confirmed 2026-03-23)
+The MCP Calendar connection (list events, create, delete) all work fine in interactive sessions. The issue was only with automated/non-interactive runs. Used successfully to list and delete 8 Easter events in one session.
 
 ### Google Calendar REST API Needs OAuth, Not API Key
 The `GOOGLE_API_KEY` in `.env` does NOT work for Calendar API — returns 403 "Method doesn't allow unregistered callers". Calendar API requires OAuth2 tokens, not simple API keys. For automated access, either pre-approve the MCP tool or set up OAuth2 credentials with a refresh token.
@@ -311,6 +355,8 @@ The `GMAIL_APP_PASSWORD` has spaces (Google app passwords are 4 groups of 4 char
 ### Use Slack Incoming Webhooks for Outbound Messages
 - Bot tokens (`xoxb-`) require proper OAuth setup and the OAuth page sometimes won't load
 - Incoming Webhooks are simpler: just POST JSON to a URL, no auth headers
+- As of 2026-03-20, both `SLACK_BOT_TOKEN` and `SLACK_WEBHOOK_URL` are configured in `.env` and working
+- MCP Slack tool (`slack_send_message`) also requires interactive permission approval, so it fails in `claude -p` automated mode
 - Webhook URL is self-authenticating — the URL IS the secret
 - Set up via api.slack.com/apps > Incoming Webhooks > Add New Webhook > select channel
 - Limitation: webhooks can only SEND to one channel; for reading messages or sending to multiple channels, you still need a bot token
@@ -348,6 +394,105 @@ Gemini Nano Banana Pro is better for precise logos. Always specify:
 3. Send the sped-up file
 
 ### Keep Text Under 5000 chars per TTS request
+
+### getUserMedia Requires HTTPS (Secure Context)
+`navigator.mediaDevices.getUserMedia` is blocked on plain HTTP origins (like `http://100.90.155.85:7600`). Browsers require HTTPS or localhost. Solution: uvicorn dual-bind — gateway serves both HTTP (7600) and HTTPS (7443) using Tailscale certs (in `certs/` dir). Do NOT use a separate HTTPS reverse proxy — `urllib`/`http.server` proxies break multipart file uploads and can't handle WebSocket upgrade. The gateway's `__main__` block uses `asyncio.gather(http_server.serve(), https_server.serve())` when certs exist.
+
+### Gateway Must Load .env for API Keys
+The gateway (`main.py`) uses `os.environ.get()` for API keys but doesn't auto-load `.env`. Added inline `.env` loader at top of `main.py` (reads `../../.env` relative to gateway). Without this, OPENAI_API_KEY and ANTHROPIC_API_KEY are missing and voice endpoints return 500.
+
+### faster-whisper Requires ffmpeg + onnxruntime on Mac Mini (2026-03-22)
+The streaming dictation pipeline has two extra dependencies beyond faster-whisper:
+- **ffmpeg**: subprocess to decode WebM/Opus to PCM (`brew install ffmpeg`). Spawns `ffmpeg -i pipe:0 -f s16le -ar 16000 -ac 1 pipe:1` per session.
+- **onnxruntime**: Silero VAD uses ONNX model directly (NOT torch). The `voice/vad.py` module downloads `silero_vad.onnx` from GitHub to `~/.cache/silero-vad/` and runs inference via `ort.InferenceSession`. This avoids the heavy torch dependency.
+After deploy, always check `uv sync` ran and gateway logs for import errors.
+
+### Gateway Dependencies Must Be Installed on Mac Mini
+The deploy script rsyncs code but doesn't run `uv sync` or `pip install`. New Python dependencies (like `httpx`) must be installed manually on Mac Mini: `ssh mac-mini "cd ~/Projects/ekus/mac-mini/gateway && uv add <package>"`. Check gateway logs (`/tmp/ekus-gateway.log`) for `ModuleNotFoundError` after deploy.
+
+### Import Order Matters in main.py
+When adding early-loading code (like .env parsing) to `main.py`, ensure `from pathlib import Path` comes before it's used. The original imports are scattered — `Path` was imported at line 28, but .env loading needed it at line 15. Move the import up or use `pathlib.Path` inline.
+
+### Voice Tab Backend API (Gateway)
+The Voice tab uses 3 separate backend endpoints (not one combined endpoint):
+- `POST /api/voice/transcribe` — accepts audio file (multipart), calls OpenAI Whisper (whisper-1), returns `{audio_id, text}`
+- `POST /api/voice/analyze` — accepts text + optional prompt, calls Claude CLI (`/opt/homebrew/bin/claude -p`) using Max account OAuth auth, returns `{analysis}`. Must strip `ANTHROPIC_API_KEY` from subprocess env so Claude CLI uses its own OAuth instead of the invalid env key.
+- `POST /api/voice/tts` — accepts text + optional voice, calls OpenAI TTS (tts-1), streams back audio/mpeg
+- WhatsApp: `GET /api/whatsapp/conversations` (uses `wacli chats list --json --limit 20`) + `POST /api/whatsapp/send` (text only) + `POST /api/whatsapp/send-audio` (generates TTS then sends MP3 via `wacli send file`)
+- Voice+WhatsApp sends **audio files, not text**. The `/api/whatsapp/send-audio` endpoint takes `{recipient, text, voice?}`, generates TTS internally (OpenAI tts-1), saves MP3 to `data/voice/`, and sends via `wacli send file --to <jid> --file <path>`. Default voice is `onyx` (male).
+- wacli commands: `chats list` (not `list`), `send text --to --message`, `send file --to --file`. Use `--json` for machine-readable output. Needs `wacli auth` + QR scan first.
+- **wacli JSON keys are capitalized**: `Name`, `JID`, `Kind`, `LastMessageTS` — NOT lowercase. The gateway was returning empty contacts because it read `chat.get("name")` instead of `chat.get("Name")`. Always check actual wacli output before parsing.
+Frontend: voice-tab.tsx has inline contact picker (scrollable chips), auto-send toggle. WhatsApp send button is rendered **inside VoiceResults** compressed card (not in the parent voice-tab.tsx — buttons at the bottom of scrollable containers get hidden on mobile). Auto-send useEffect calls `api.sendWhatsAppAudio()` directly instead of going through `sendToWhatsApp` callback to avoid stale closures. Processing hook in `use-voice-processing.ts`.
+
+### Claude OAuth Tokens ≠ API Keys for Direct Calls
+Claude Code OAuth tokens (`sk-ant-oat01-*`) from `~/.claude/.credentials.json` do NOT work as `x-api-key` or `Authorization: Bearer` for direct `api.anthropic.com` calls. They only work through the Claude Agent SDK or Claude CLI. For gateway endpoints that need Claude, spawn `claude -p --output-format text` as a subprocess with absolute path (`/opt/homebrew/bin/claude`). Strip `ANTHROPIC_API_KEY` from env so CLI uses its own OAuth. `uv run` strips PATH so subprocess can't find `claude` without absolute paths.
+
+### API Client Must Check r.ok Before Parsing JSON (2026-03-20)
+The `api.ts` helper uses `fetch().then(r => r.json())` which never checks `r.ok`. When a backend endpoint returns HTTP 4xx/5xx, `fetch` still resolves (only rejects on network errors). The error JSON (`{"detail":"..."}`) gets parsed, but the expected fields are missing — so the result is silently undefined. Fixed for voice endpoints with a `checkedJson()` helper that throws on non-200. **The rest of api.ts still has this pattern** — fix other endpoints as they break.
+
+### faster-whisper on Mac Mini (2026-03-22)
+When switching from OpenAI Whisper API to local faster-whisper on Mac Mini (Apple Silicon):
+- Use `compute_type="int8"` — quantization reduces model from ~3GB to ~1.6GB and improves CPU throughput by ~40% with minimal quality loss
+- Use `cpu_threads=4` for M-series chips (efficiency + performance cores)
+- Lazy-load the model (first call takes ~5s, then stays resident)
+- Always wrap transcription in `asyncio.to_thread()` since faster-whisper is CPU-bound and will block the FastAPI event loop
+- `vad_filter=True` in faster-whisper enables built-in Silero VAD, but for streaming you need to run VAD explicitly on incoming audio chunks (not wait for entire recording)
+- The `initial_prompt` parameter is key to quality: include language instruction, known vocabulary, and correction pairs to bias recognition
+
+### Gateway Must Be Fully Restarted After Deploy (2026-03-22)
+The deploy script (`mac-mini.sh deploy`) rsyncs code and restarts, but if `kill $(lsof -ti :7600)` doesn't fully terminate the old process (e.g., port still bound), the new gateway may fail to start on :7600 while :7443 HTTPS starts fine. Always kill BOTH ports: `kill $(lsof -ti :7600) 2>/dev/null; kill $(lsof -ti :7443) 2>/dev/null; sleep 2` before starting. Also: testing imports with bare `python3` misses venv packages — always use `uv run python` on Mac Mini. Quick restart one-liner: `ssh ggomes@100.90.155.85 "export PATH=/opt/homebrew/bin:\$HOME/.local/bin:\$PATH && kill \$(lsof -ti :7600) 2>/dev/null; kill \$(lsof -ti :7443) 2>/dev/null; sleep 2 && cd ~/Projects/ekus/mac-mini/gateway && nohup uv run python main.py > /tmp/ekus-gateway.log 2>&1 &"`
+
+### Deploy Voice Dictation Checklist (2026-03-22)
+After deploying the voice dictation feature: (1) `./scripts/mac-mini.sh deploy` builds+rsyncs+restarts, (2) `uv sync` on Mac Mini — needs full PATH export since SSH doesn't load shell profile: `export PATH="$HOME/.local/bin:$HOME/.cargo/bin:/opt/homebrew/bin:$PATH"`, (3) verify ffmpeg installed (`brew install ffmpeg`), (4) smoke test: `curl /api/voice/preferences` and `curl /api/voice/corrections`, (5) first transcription downloads large-v3 model (~1.6GB) — allow a few minutes.
+
+### VoiceResults "Transcribe Only" Mode Hides Transcription (2026-03-23)
+In `voice-results.tsx`, the "Original" transcription section uses `showOriginal` state that defaults to `false` (collapsed). In "Transcribe Only" mode (no analysis/compression), the transcription is the PRIMARY result but was invisible — user had to click to expand. Fix: `useEffect` that auto-expands when `transcription` exists without `analysis`, and auto-collapses when `analysis` arrives. Also relabel "Original" → "Transcription" and boost text contrast when it's the primary result.
+
+### Auto-Learn Hook Resets Per Turn (2026-03-22)
+The `auto-learn-stop.sh` hook counts tool calls since last memory save, but resets each turn. In long agent-team sessions where the lead is mostly coordinating (sending messages, checking tasks), the counter hits 150+ without any file write. Fix: do a memory write early in each long coordination stretch, not just once at the start.
+
+### Voice Dictation System File Layout (2026-03-22)
+Backend: `mac-mini/gateway/voice/` (8 modules: transcriber, vad, pipeline, db, cleanup, routes, eval, __init__). Frontend: `ekus-app/src/features/voice/dictation/` (7 files: use-dictation, use-corrections, dictation-view, dictation-controls, dictation-transcript, dictation-toolbar, corrections-panel). SQLite DB at `data/voice/dictation.db`. Eval test corpus at `data/voice/eval/`.
+
+### New Voice Router Coexists with Old Endpoints (2026-03-22)
+When adding the new `voice_router` (mounted at `/api/voice`), existing endpoints like `POST /api/voice/transcribe` in main.py still work because FastAPI matches more-specific routes first. The new router adds `/transcribe-local`, `/corrections`, `/vocabulary`, `/preferences`, `/cleanup`, and WS `/dictation` — none conflict with the old `/transcribe`, `/analyze`, `/tts` endpoints. Always keep old endpoints for backward compat until the frontend is fully migrated.
+
+### WebSocket Audio Streaming Architecture (2026-03-22)
+For real-time voice dictation in a PWA (not Electron):
+- Use a DEDICATED WebSocket (not reuse existing channel WS) — mixing binary audio with JSON chat is fragile
+- Browser sends WebM/Opus chunks via MediaRecorder `timeslice: 500` (500ms chunks)
+- Server decodes to PCM via streaming ffmpeg subprocess (stdin pipe, 16kHz mono s16le)
+- Silero VAD runs on 30ms frames to detect speech boundaries
+- Segment assembly needs pre-roll (200ms) + post-roll (350ms) padding around detected speech
+- Partials (beam_size=1 for speed) every ~2s during speech; finals (beam_size=5) on segment end
+- Claude cleanup runs ONCE when user stops (not per-segment) to keep latency reasonable
+
+### Agent Teams: Parallel Backend + Frontend (2026-03-22)
+For large features touching both backend and frontend, spawn both teammates in parallel from the start. The frontend can build against the planned API contract (types, hooks, component structure) while the backend builds the actual endpoints. Sequential phases (like VAD pipeline depending on transcriber) should be assigned to the same teammate to avoid handoff overhead. Keep task dependencies explicit via TaskUpdate addBlockedBy. Idle notifications between turns are normal — teammates wake up when messaged. For 5-phase projects: 2 teammates can cover all work by reassigning after each phase completes.
+
+### iOS/Safari MediaRecorder Doesn't Support WebM (2026-03-20)
+`MediaRecorder` on iOS Safari only supports `audio/mp4` (not `audio/webm`). Hardcoding `audio/webm` causes either a `NotSupportedError` or produces broken output. Fix: probe supported types in order: `audio/webm;codecs=opus` → `audio/webm` → `audio/mp4` → `audio/aac` → omit (let browser pick default). Also ensure the blob type and filename extension match the actual recorded format when uploading to Whisper.
+
+### Faster-Whisper Model Load Takes 44s on Mac Mini CPU (2026-03-23)
+First load of `WhisperModel("large-v3", device="cpu", compute_type="int8", cpu_threads=4)` takes ~44s on Mac Mini M2. Subsequent transcriptions take ~9s for ~10s of audio. The dictation pipeline's `stop()` originally had a 10s timeout for the processor task, which killed transcriptions mid-flight. Fix: (1) increase timeout to 120s, (2) add `warm_up()` function in transcriber.py, (3) call it from `@app.on_event("startup")` via `asyncio.create_task(asyncio.to_thread(warm_up))` so the model is pre-loaded before the first dictation request. Note: the warm-up singleton has a race condition if called from multiple threads — two loads can happen, but only the first result is kept.
+
+### Silero VAD Threshold Too High for Phone Microphone (2026-03-23)
+Default VAD threshold of 0.5 works for Portuguese but fails for English on phone mic — probabilities hover at 0.3-0.5, never sustaining above 0.5 for enough consecutive frames. Lowered to 0.35 and reduced `min_speech_duration_ms` from 250 to 160 (5 consecutive frames instead of 7). Phone mic audio is also much quieter than test TTS audio (rms=278 vs rms=7038), so the threshold needs headroom.
+
+### Silero VAD ONNX Model Is Broken — Use PyTorch (2026-03-23)
+The Silero VAD ONNX model downloaded from `https://github.com/snakers4/silero-vad/raw/master/src/silero_vad/data/silero_vad.onnx` returns ~0.001 probability for ALL inputs (silence, sine waves, real speech). The model is non-functional as of silero-vad v6. Fix: install `silero-vad` pip package (`uv add silero-vad`, which pulls in `torch` + `torchaudio`) and use `load_silero_vad(onnx=False)` for PyTorch inference. The PyTorch model works correctly (0.999 for real speech). Also: Silero VAD requires 512-sample frames (32ms at 16kHz), NOT 480 (30ms). Using wrong frame size produces garbage probabilities.
+
+### WebSocket Closes Before Transcription Completes (2026-03-23)
+The dictation WS handler calls `await session.stop()` which waits for transcription (13s+ on CPU). The frontend had a 5s timeout that gave up and set status to 'idle'. Meanwhile, the backend's `session.stop()` completed and tried to send results via the closed WS → "Cannot call send once a close message has been sent". Fix: (1) increase frontend timeout from 5s to 60s, (2) close WS only AFTER receiving the 'stopped' event (call `cleanupWs()` in the `stopped` handler), (3) wrap the backend's `send_json` in try/except so send failures don't crash the handler. The general pattern: for long-running async operations over WebSocket, the frontend must keep the connection alive until the operation completes.
+
+### Voice Dictation Pipeline Debugging Strategy (2026-03-23)
+When dictation produces no transcription, diagnose stage by stage with `print(..., flush=True)` (not logging — see Python logging lesson):
+1. **WebSocket**: Check `[WS] Chunk #N` — are audio chunks arriving? (271KB = ~8.5s of 16kHz PCM)
+2. **FFmpeg**: Check `[FFMPEG] First PCM chunk` and `[FFMPEG] EOF after N bytes` — is ffmpeg producing PCM output?
+3. **Frames**: Check `[FRAMES] #N: rms=X max=Y` — is PCM data non-silent? (rms > 100 = real audio, rms < 10 = silence/corrupt)
+4. **VAD**: Check `[VAD] frame=N prob=X` — what speech probabilities is Silero returning? (prob > 0.5 = speech detected)
+5. **Transcription**: Check `[TRANSCRIBE] Segment N` — did a segment finalize and get sent to faster-whisper?
+If audio flows through ffmpeg (step 2 OK) but VAD never fires (step 4 shows prob always < 0.5), check: ffmpeg output format (must be s16le 16kHz mono), MediaRecorder input format (iOS sends mp4, not webm — ffmpeg `-f webm` won't decode mp4).
 
 ## Task Sync
 
@@ -443,8 +588,27 @@ nohup uv run python main.py > /tmp/ekus-gateway.log 2>&1 &
 ```
 Management script: `./scripts/mac-mini.sh start|stop|restart|status`
 
+### Mac Mini Gateway — `nohup uv` Fails Over SSH (2026-03-23)
+`nohup uv run python main.py` fails with "uv: No such file or directory" when run via `ssh mac-mini '...'` because `uv` is installed via Homebrew and not in the default SSH PATH. Use the full path: `nohup /opt/homebrew/bin/uv run python main.py > /tmp/ekus-gateway.log 2>&1 &`. Alternatively, `lsof -ti:7600` may show the gateway is supervised by launchd and auto-restarts on kill — in that case, `kill -9 <pid>` is enough to restart with new code (after clearing `__pycache__`).
+
+### Mac Mini Gateway — Rsync to Correct Path (2026-03-23)
+The gateway runs from `/Users/ggomes/Projects/ekus/mac-mini/gateway/` (verified via `lsof -p <pid> | grep cwd`). An earlier rsync target of `/Users/ggomes/ekus/` was wrong — code deployed there is never loaded. Always rsync to: `ggomes@100.90.155.85:/Users/ggomes/Projects/ekus/mac-mini/gateway/voice/`
+
+### Mac Mini Gateway — Launchd Auto-Restart (2026-03-23)
+The gateway process is managed by launchd and auto-restarts when killed. To restart with new code: (1) clear `__pycache__`, (2) `kill -9 <pid>` — launchd respawns it automatically. No need for manual `nohup` start. Verify the new PID is different after kill.
+
 ### Claude Code Credentials File Is `.credentials.json` (With Leading Dot)
 Claude Code stores OAuth credentials in `~/.claude/.credentials.json` (with a leading dot), NOT `~/.claude/credentials.json`. On macOS it tries the Keychain first, then falls back to this plaintext file. If you write credentials to the wrong filename, `claude auth status` will report `loggedIn: false`.
+
+### macOS Keychain Blocks SSH-Based Claude Auth (2026-03-22, updated 2026-03-23)
+Claude Code on macOS always prefers Keychain storage. Even after deleting the Keychain entry and re-running `claude auth login`, the running Claude Code session recreates the Keychain entry and may delete `.credentials.json`. SSH sessions can't read Keychain (`errSecInteractionNotAllowed`), so the auto-refresh cron loses access to tokens.
+
+**Full fix (3 layers):**
+1. `channel-start` script deletes Keychain entry before starting Claude Code: `security delete-generic-password -s "Claude Code-credentials" 2>/dev/null`
+2. After `claude auth login`, extract Keychain → file via GUI context: `osascript -e 'tell application "Terminal" to do script "security find-generic-password -s \"Claude Code-credentials\" -a \"ggomes\" -w > /tmp/kc.txt"'` then copy to `.credentials.json` + `credentials.json`
+3. Auto-renewal cron (`scripts/refresh-claude-auth.sh` every 2h) writes to BOTH files; if files are missing, tries Keychain extraction via osascript
+
+**Key insight:** Claude Code token TTL is ~8 hours. Cron at 2h intervals with 2h threshold means refresh happens at ~6h mark, giving 2h of margin. Write to BOTH `.credentials.json` and `credentials.json` as redundancy.
 
 ### Mac Mini Jobs — Headed Tmux (2026-03-13)
 User prefers "headed" tmux sessions for agent jobs — Terminal.app window opens so you can watch the agent work live. `worker.py` uses AppleScript (`tell application "Terminal" to do script`) instead of `tmux new-session -d`. The capture-pane polling and sentinel logic works identically whether the session is attached or detached.
@@ -482,6 +646,106 @@ User prefers "headed" tmux sessions (Terminal.app window opens so you can watch 
 ### Python Heredoc Parses Numbers as Code
 When piping multiline text through `python3 << 'PYEOF'`, any content that looks like Python code gets parsed — e.g., `0222` in a task description triggers `SyntaxError: leading zeros in decimal integer literals`. **Fix:** use file-based approach instead: write content to a temp file, then process it. Avoid embedding arbitrary user content inside Python heredocs.
 
+## Python / Package Management
+
+### macOS: Use pipx for Python CLI Tools (2026-03-20)
+macOS (Homebrew Python) blocks `pip install` system-wide due to PEP 668 ("externally-managed-environment"). Use `pipx` to install Python CLI tools in isolated venvs:
+1. `brew install pipx && pipx ensurepath` (one-time setup)
+2. `pipx install "package[extras]"` to install CLI tools
+3. For packages that bundle Playwright, the `playwright` CLI isn't directly exposed by pipx. Run it from the venv: `~/.local/pipx/venvs/<package>/bin/playwright install chromium`
+4. Installed CLIs land in `~/.local/bin/` — may need `export PATH="$HOME/.local/bin:$PATH"` or new terminal.
+
+**Installed tools via pipx:** `notebooklm-py` (v0.3.4, with browser extras + Playwright chromium)
+
+## Skill Creator
+
+### SKILL.md `name` Must Be Hyphen-Case
+The `name` field in SKILL.md frontmatter must be lowercase hyphen-case (e.g., `brainstorm`, `my-skill`). Title case like `Brainstorm` fails validation. The packaging script enforces this.
+
+### Packaging Script Needs PyYAML via pipx
+The `package_skill.py` and `quick_validate.py` scripts require `pyyaml` which isn't available system-wide on macOS. Run with: `pipx run --spec pyyaml python3 scripts/package_skill.py <path> <output>`. `uv run` also fails because it doesn't resolve the yaml dep automatically.
+
+### Packaging Script Path
+Always `cd` to the skill-creator directory first or use full paths: `cd /Users/ggomes/.claude/skills/skill-creator && pipx run --spec pyyaml python3 scripts/package_skill.py <skill-path> <output-dir>`
+
+## Claude Code Channels
+
+### Channels Require v2.1.80+ and claude.ai Auth (2026-03-20, updated 2026-03-23)
+Claude Code Channels are a research preview feature (as of March 2026). Requirements: v2.1.80+, claude.ai OAuth login (no API keys/Console). Custom channels need `--dangerously-load-development-channels server:<name>` flag. The channel server is an MCP server spawned by Claude Code as a subprocess via `.mcp.json` — it communicates over stdio. For external input, the channel server runs its own HTTP listener in the same process. See `obsidian-vault/Ekus/Knowledge/Claude Code Channels.md` for full protocol reference.
+
+**Version gotcha:** Claude Code on Mac Mini can silently downgrade (e.g., from 2.1.80 to 2.1.66) when the symlink at `~/.local/bin/claude` gets stale. Always run `claude update` before starting the channel. Current: v2.1.81. Check with `claude --version`.
+
+### Keep `claude auth login` Alive in tmux (2026-03-20)
+The `claude auth login` process must stay alive to exchange the OAuth code (PKCE requires the code_verifier from the same process). Use tmux to keep it running: `tmux new-session -d -s claude-auth 'claude auth login 2>&1 | tee /tmp/claude-auth.log'`. Then feed the code back via `tmux send-keys -t claude-auth "CODE" Enter`. If the process dies before receiving the code, you must start over with a fresh URL.
+
+### OAuth URL Is Session-Specific (code_challenge) (2026-03-20)
+The `claude auth login` OAuth URL contains a `code_challenge` that is tied to the specific `claude auth login` process. If that process dies (e.g., SSH disconnect, timeout), the code_challenge becomes invalid and you need to re-run `claude auth login` to get a fresh URL. The auth login process must stay alive to receive the code callback. On Mac Mini via SSH, use `ssh -tt` for PTY allocation and capture the URL before the process terminates.
+
+### Piping `claude` (non -p mode) Through tee Breaks It (2026-03-20)
+Running `claude ... 2>&1 | tee logfile` in tmux causes "Error: Input must be provided either through stdin or as a prompt argument when using --print" — the pipe interferes with Claude's terminal UI. For logging, redirect stderr only: `claude ... 2>/tmp/log` or use `script` command. The interactive `claude` command needs a real TTY.
+
+### Bun Install on Mac Mini (2026-03-20)
+Bun is not available via Homebrew on the Mac Mini. Install with: `curl -fsSL https://bun.sh/install | bash`. Binary goes to `~/.bun/bin/bun`. Add `$HOME/.bun/bin` to PATH in all scripts. Installed version: 1.3.11.
+
+### macOS Has No `timeout` Command (2026-03-20)
+macOS doesn't ship with GNU `timeout`. Use background process + sleep + kill pattern instead, or install `coreutils` via Homebrew for `gtimeout`. For SSH commands that might hang, use `ssh -o ConnectTimeout=5` instead.
+
+### Channel MCP Server Needs GATEWAY_URL Env Var (2026-03-20)
+The ekus-channel MCP server (`mac-mini/channel/server.ts`) defaults `GATEWAY_URL` to `http://localhost:7600`. Since it runs locally as a Claude Code subprocess but the gateway is on the Mac Mini (`100.90.155.85:7600`), replies fail with "Internal Server Error" — the POST to `/api/channel/reply` hits localhost which has no gateway. Fix: set `"env": {"GATEWAY_URL": "http://100.90.155.85:7600"}` in `.mcp.json`.
+
+### FastAPI WebSocket Requires `websockets` Package (2026-03-20)
+FastAPI's `@app.websocket()` decorator silently fails with 404 if the `websockets` PyPI package isn't installed. Uvicorn can't handle the WebSocket upgrade without it. Always add `websockets` to `pyproject.toml` dependencies when using `@app.websocket()`.
+
+### Use `exec claude` in tmux (No Pipes) (2026-03-20)
+When starting Claude Code in tmux for channel mode, use `exec claude --dangerously-load-development-channels ...` — do NOT pipe through `tee` or redirect stdout. The `| tee` pipe makes Claude detect a non-TTY stdout and switch to `--print` mode, which then errors with "Input must be provided either through stdin or as a prompt argument." Use `exec` so Claude replaces the shell and gets the real TTY.
+
+### Make tmux Sessions Visible on Mac Mini (2026-03-20, updated 2026-03-23)
+Detached tmux sessions (`tmux new-session -d`) are invisible when sitting at the Mac Mini. Use `osascript` to open a Terminal.app window that auto-attaches: `osascript -e 'tell application "Terminal" to do script "tmux attach -t ekus-claude"'`.
+
+**Terminal.app window cleanup (critical):** When sessions are killed (switching, stopping), the Terminal.app windows with `tmux attach` become orphaned and accumulate. Fix in `_stop_claude_session()` and `_start_claude_session()` in `main.py`: (1) `pkill -f "tmux attach -t ekus-claude"` kills the attach processes, (2) `osascript -e 'tell application "Terminal" to close (every window whose processes = {})'` closes empty Terminal windows, (3) THEN kill the tmux session. Same pattern in `mac-mini.sh channel-start/stop` using `pgrep -f | xargs kill`.
+
+### `--dangerously-load-development-channels` Requires Interactive Confirmation (2026-03-20)
+Claude Code v2.1.80+ shows a safety prompt ("I am using this for local development" / "Exit") when using `--dangerously-load-development-channels`. In tmux, auto-confirm with `tmux send-keys -t ekus-claude Enter` after a short delay. The channel server won't start until this is confirmed.
+
+### Gateway Session Controller: asyncio.Lock at Module Level (2026-03-20)
+`asyncio.Lock()` can be created at module level in FastAPI apps — uvicorn's event loop is set up before the module's coroutines run. Used for `_session_lock` to serialize session switch operations and prevent concurrent switches from corrupting state.
+
+### Claude Code --session-id and --resume Flags (2026-03-20)
+`--session-id <uuid>` starts Claude Code with a pre-determined session UUID (we generate it). `--resume <uuid>` resumes an existing session with full context. Sessions stored as `.jsonl` files in `~/.claude/projects/<project-hash>/`. If the JSONL file is missing, `--resume` fails silently — always check existence before resuming and fall back to fresh `--session-id`.
+
+### Chat First-Message Blank Screen Bug (2026-03-21)
+In channel mode, the first message would cause the chat to go blank, recovering only on the second message. **Root cause (two-fold):**
+1. **`clearMessages()` race condition** — The `useEffect` watching `activeSessionId` called `channel.clearMessages()` whenever `activeSessionId` was null. In channel mode, sessions start null, so every mount/re-render cleared messages. **Fix:** Track previous session via `useRef` and only clear when transitioning FROM a named session to null.
+2. **Rendering gated on flickering `channelAvailable`** — The JSX only rendered channel messages when `channelAvailable` was true, but this flag (from `/api/channel/status` polling) can flicker to false momentarily. **Fix:** Use `isChannelMode = channel.messages.length > 0 || channelAvailable || sessionState === 'ready'` so messages survive brief status flickers.
+
+**Pattern:** When gating UI rendering on an async polling status, always include the actual data presence (`messages.length > 0`) as a fallback condition — don't rely solely on the status endpoint.
+
+## Frontend / UI
+
+### PWA Service Worker Cache Blocks New Deploys (2026-03-22)
+After deploying a new Next.js build, the browser may continue serving the OLD build from the service worker cache — even with a network-first strategy. Symptoms: UI looks outdated, new features missing, no errors. The JS file hash in the console (e.g., `page-7f133b8a12633765.js`) won't match the deployed file (e.g., `page-5f60966118844397.js`). **Fix:** Always bump `CACHE_VERSION` in `sw.js` before rebuilding. The new SW will install, activate, and delete old caches. Without this, the old SW keeps serving stale `index.html` which references old JS hashes. **Deploy checklist addition:** After `npm run build` + rsync, verify the browser loads the correct build hash by checking DevTools Network tab or `document.querySelectorAll('script[src*="page-"]')`.
+
+### Python Logging Under Uvicorn Is Unreliable — Use print() (2026-03-23)
+`logging.getLogger(__name__)` in FastAPI modules (e.g., `voice.routes`) produces NO output under uvicorn, even with `logging.basicConfig(level=logging.INFO)` added to `main.py`. Uvicorn's internal `dictConfig()` call overrides/interferes with the root logger's handlers. Tested: `log.warning()` and `log.info()` both silently drop. **Only `print(..., flush=True)` reliably appears in `/tmp/ekus-gateway.log`** (which captures both stdout and stderr via `nohup ... > log 2>&1`). For production diagnostics in the gateway, always use `print()` with `flush=True` — don't waste time debugging Python logging configuration under uvicorn.
+
+### PWA Icon Replacement Requires Home Screen Re-add (2026-03-21)
+Changing PWA icons (manifest.json icons, apple-touch-icon) doesn't update the icon on the user's home screen. They must delete the PWA and re-add it. Also: bump the service worker cache version and clean old caches (both `ekus-*` and `ekoa-*` prefixes) so stale assets don't persist. Source icons live in `ekoa-dev/_app-reference/public/ekoa-icon.png` (2048x2048) — use `sips -z` to generate 192/512 PNGs.
+
+### Fixed Input Overlapping Bottom Nav (2026-03-21)
+Chat input was `fixed bottom-[60px]` but the bottom nav is ~64px tall (pt-2 + min-h-56px items) before safe area. On iPhones with home indicator, the nav grows even taller. Fix: `bottom-[76px]` gives reliable clearance. Rule of thumb: measure the nav's actual rendered height (padding + item height + safe area) and add 8-12px gap.
+
+### Claude Code Refreshes Tokens In-Memory, Not On Disk (2026-03-22)
+`~/.claude/credentials.json` can show an expired `expiresAt` while `claude auth status` reports `loggedIn: true`. Claude Code refreshes OAuth tokens in-memory during a session but does NOT write updated tokens back to the file. This means: (1) copying credentials.json between machines gives you stale tokens, (2) the file's `expiresAt` is only accurate right after `claude auth login`, (3) you can't rely on the file to check if auth is valid — use `claude auth status` instead. **Implication for auto-renewal:** a cron-based refresh script must proactively refresh tokens via the OAuth endpoint and write them back to disk, since Claude Code won't do this for you.
+
+### OAuth Refresh Rate Limits Are Token-Based, Not IP-Based (2026-03-22)
+The `platform.claude.com/v1/oauth/token` refresh endpoint rate-limits by refresh token, not by IP. Retrying from a different machine (Mac Mini → MacBook) hits the same 429. Rate limit window appears to be 5+ minutes. **Lesson:** Don't rapid-fire refresh attempts. The auto-renewal script (`scripts/refresh-claude-auth.sh`) should run infrequently (every 6h) and only refresh when <1h remains.
+
+### Mac Mini SSH PATH Missing Claude and Tmux (2026-03-22)
+Non-interactive SSH sessions on the Mac Mini don't load the full PATH. `claude` is at `~/.local/bin/claude` and `tmux` is at `/opt/homebrew/bin/tmux` — neither is in the default SSH PATH (`/usr/bin:/bin:/usr/sbin:/sbin`). Fix: always prepend `export PATH="/opt/homebrew/bin:$HOME/.local/bin:$HOME/.bun/bin:$PATH"` in SSH commands or tmux send-keys.
+
+### Glass Morphism Kills Readability on Dark Backgrounds (2026-03-21)
+Using `rgba(255, 255, 255, 0.08)` with `backdrop-filter: blur()` for chat message bubbles made them virtually invisible against the dark navy (#0f1419) background. The 8% white opacity provides almost no visual separation. **Fix:** Use solid dark surfaces (`#1a2636`) for any container that holds readable text. Reserve glass morphism for decorative elements (headers, nav bars) where contrast isn't critical. For chat specifically: user bubbles use the brand color (teal gradient) with white text, AI bubbles use a solid elevated dark surface with a colored left accent border.
+
 ## People
 
 ### Wilson Bicalho
@@ -494,7 +758,9 @@ Next Border (NB) partner. Has a recurring "SYNC Estratégico Next Border" meetin
 Cleaning lady. Coordinate house cleaning with her for special occasions.
 
 ### Household Context
-- **Marília** — Gonçalo's partner. Her parents are part of family events.
+- **Marília** — Gonçalo's wife. Her parents are part of family events.
+- **Diogo** — Gonçalo and Marília's son.
+- **Laura** — Gonçalo and Marília's daughter.
 - **Elsa** — family member, invited to gatherings with her family.
 - **Talho de Tires** — butcher shop, requires early reservation for lamb orders.
 - **Quinta dos Cafanhotos** — lady who prepares baked cod trays (tabuleiros de bacalhau assado). Marília has the contact.

@@ -40,29 +40,26 @@ export function ChatMessage({ job, streamOutput, isStreaming }: ChatMessageProps
 
   return (
     <motion.div
-      className="flex flex-col gap-2 mb-4"
+      className="flex flex-col gap-4 mb-5"
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
     >
       {/* User message */}
-      <div className="flex justify-end">
-        <div
-          className="max-w-[85%] rounded-2xl rounded-br-md px-4 py-2.5 text-sm text-white"
-          style={{ background: 'var(--primary)' }}
-        >
+      <div className="flex justify-end w-full">
+        <div className="chat-bubble-user">
           {job.prompt}
         </div>
       </div>
 
       {/* Assistant response */}
       {(output || isStreaming || isRunning) && (
-        <div className="flex justify-start">
+        <div className="flex justify-start w-full">
           <div
-            className={`max-w-[85%] glass rounded-2xl rounded-bl-md px-4 py-3 ${isLong ? 'cursor-pointer' : ''}`}
+            className={`chat-bubble-ai ${isLong ? 'cursor-pointer' : ''}`}
             onClick={() => isLong && setExpanded(!expanded)}
           >
-            <div className="flex items-center gap-2 mb-1.5">
+            <div className="flex items-center gap-2 mb-2">
               <StatusBadge
                 variant={
                   isStreaming || isRunning

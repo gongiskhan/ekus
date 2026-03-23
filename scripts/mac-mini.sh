@@ -12,6 +12,9 @@
 #   ./scripts/mac-mini.sh job <id>        — Get job details
 #   ./scripts/mac-mini.sh stop-job <id>   — Stop a running job
 #   ./scripts/mac-mini.sh logs            — Show gateway logs
+#   ./scripts/mac-mini.sh channel-start   — Start Claude with channel
+#   ./scripts/mac-mini.sh channel-stop    — Stop Claude channel session
+#   ./scripts/mac-mini.sh channel-status  — Check channel status
 
 set -euo pipefail
 
@@ -141,6 +144,7 @@ case "${1:-help}" in
             --exclude 'obsidian-vault/' \
             --exclude 'mac-mini/gateway/jobs/' \
             --exclude 'mac-mini/terminal/node_modules' \
+            --exclude 'mac-mini/channel/node_modules' \
             "${EKUS_DIR}/" "${MAC_MINI_USER}@${MAC_MINI_HOST}:${REMOTE_EKUS_DIR}/" \
             | tail -5
         echo "Deploy complete. Restarting services..."
@@ -150,6 +154,7 @@ case "${1:-help}" in
             # Stop existing services
             lsof -ti:${GATEWAY_PORT} | xargs kill -9 2>/dev/null || true
             lsof -ti:${TERMINAL_PORT} | xargs kill -9 2>/dev/null || true
+            lsof -ti:7443 | xargs kill -9 2>/dev/null || true
             sleep 1
 
             # Install terminal server deps
@@ -158,7 +163,7 @@ case "${1:-help}" in
             # Start terminal server
             nohup node server.js > /tmp/ekus-terminal.log 2>&1 &
 
-            # Start gateway
+            # Start gateway (serves HTTP on 7600 + HTTPS on 7443 if certs exist)
             cd ${REMOTE_EKUS_DIR}/mac-mini/gateway
             nohup uv run python main.py > /tmp/ekus-gateway.log 2>&1 &
         "
@@ -205,6 +210,94 @@ case "${1:-help}" in
         ssh_cmd "cat /tmp/ekus-gateway.log 2>/dev/null | tail -50"
         ;;
 
+    channel-start)
+        echo "Starting Claude Code with channel on Mac Mini..."
+        ssh_cmd "
+            export PATH=/opt/homebrew/bin:\$HOME/.local/bin:\$HOME/.bun/bin:\$PATH
+            cd ${REMOTE_EKUS_DIR}
+
+            # Install channel deps if needed
+            if [ ! -d mac-mini/channel/node_modules ]; then
+                echo 'Installing channel dependencies...'
+                cd mac-mini/channel && bun install 2>&1 | tail -3 && cd ${REMOTE_EKUS_DIR}
+            fi
+
+            # Ensure Keychain doesn't trap credentials (SSH can't read Keychain)
+            security delete-generic-password -s 'Claude Code-credentials' 2>/dev/null || true
+
+            # Kill existing session + any stale Terminal windows attached to it
+            pgrep -f 'tmux attach -t ekus-claude' | xargs kill 2>/dev/null || true
+            tmux kill-session -t ekus-claude 2>/dev/null || true
+
+            # Start Claude with channel in tmux
+            tmux new-session -d -s ekus-claude \
+                \"export PATH=/opt/homebrew/bin:\\\$HOME/.local/bin:\\\$HOME/.bun/bin:\\\$PATH; \
+                 cd ${REMOTE_EKUS_DIR} && \
+                 set -a && source .env 2>/dev/null && set +a; \
+                 exec claude --dangerously-load-development-channels server:ekus-channel \
+                        --dangerously-skip-permissions\"
+
+            sleep 3
+            if tmux has-session -t ekus-claude 2>/dev/null; then
+                echo 'Channel session started.'
+                # Auto-confirm the development channels safety prompt
+                sleep 2
+                tmux send-keys -t ekus-claude Enter 2>/dev/null || true
+                # If Keychain has credentials but files don't, extract them
+                if [ ! -f \$HOME/.claude/.credentials.json ]; then
+                    TMPF=\$(mktemp)
+                    osascript -e 'tell application \"Terminal\"
+                        do script \"security find-generic-password -s \\\\\"Claude Code-credentials\\\\\" -a \\\\\"ggomes\\\\\" -w > /tmp/kc-extract.txt 2>&1\"
+                    end tell' 2>/dev/null || true
+                    sleep 3
+                    if [ -s /tmp/kc-extract.txt ] && python3 -c \"import json; json.load(open('/tmp/kc-extract.txt'))\" 2>/dev/null; then
+                        cp /tmp/kc-extract.txt \$HOME/.claude/.credentials.json
+                        cp /tmp/kc-extract.txt \$HOME/.claude/credentials.json
+                        chmod 600 \$HOME/.claude/.credentials.json \$HOME/.claude/credentials.json
+                        echo 'Extracted Keychain credentials to files.'
+                    fi
+                    rm -f /tmp/kc-extract.txt \$TMPF
+                fi
+                # Open a visible Terminal window attached to the tmux session
+                osascript -e 'tell application \"Terminal\"
+                    activate
+                    do script \"tmux attach -t ekus-claude\"
+                end tell' 2>/dev/null || true
+            else
+                echo 'Failed to start channel session.'
+                exit 1
+            fi
+        "
+        echo "Channel session started (visible on Mac Mini)."
+        ;;
+
+    channel-stop)
+        echo "Stopping Claude channel session..."
+        ssh_cmd "
+            export PATH=/opt/homebrew/bin:\$PATH
+            # Kill processes attached to the tmux session (Terminal windows)
+            pgrep -f 'tmux attach -t ekus-claude' | xargs kill 2>/dev/null || true
+            # Kill the tmux session itself
+            tmux kill-session -t ekus-claude 2>/dev/null || true
+        "
+        echo "Channel session stopped."
+        ;;
+
+    channel-status)
+        echo "Channel server:"
+        if curl -s --max-time 3 "http://${MAC_MINI_HOST}:8788/health" 2>/dev/null; then
+            echo ""
+        else
+            echo "  NOT running."
+        fi
+        echo ""
+        echo "Channel status via gateway:"
+        curl -s --max-time 5 "${GATEWAY_URL}/api/channel/status" 2>/dev/null || echo "  Gateway not reachable."
+        echo ""
+        echo "Tmux session:"
+        ssh_cmd "tmux has-session -t ekus-claude 2>/dev/null && echo '  ekus-claude: ACTIVE' || echo '  ekus-claude: NOT FOUND'"
+        ;;
+
     *)
         echo "Ekus Mac Mini Manager"
         echo ""
@@ -222,5 +315,8 @@ case "${1:-help}" in
         echo "  job <id>        Get job details"
         echo "  stop-job <id>   Stop a running job"
         echo "  logs            Show gateway logs"
+        echo "  channel-start   Start Claude with channel"
+        echo "  channel-stop    Stop Claude channel session"
+        echo "  channel-status  Check channel status"
         ;;
 esac
