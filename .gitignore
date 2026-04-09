@@ -22,3 +22,6 @@ logs
 
 # Obsidian vault (has its own git repo)
 obsidian-vault/mac-mini/gateway/certs/
+
+# Gateway jobs output
+mac-mini/gateway/jobs/
